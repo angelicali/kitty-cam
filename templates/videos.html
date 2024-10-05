@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KittyCam Activities</title>
+</head>
+<body>
+    <h1>Videos</h1>
+    <ul>
+        {% for video in video_files %}
+            <li>
+                <video width="320" height="240" controls onloadstart="this.playbackRate=0.25">
+                    <source src="{{ url_for('serve_video', filename=video) }}" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <p>{{ video }}</p>
+            </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
+
