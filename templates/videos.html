@@ -29,12 +29,12 @@
     	<h1>Kitty visits</h1>
     </div>
     <div id="video-gallary">
-        {% for (t, video) in video_files %}
+        {% for (t, videoid) in video_files %}
             <div class="video-container">
 		<div class="video-header">
 			<div> {{ t }} </div>
 			<div> 
-				<select name="label" id="{{video.split('.')[0]}}-label">
+				<select name="label" id="{{videoid}}-label">
 					<option disabled selected value> </option>
 					<option value="xiaomao">Xiaomao</option>
 					<option value="siama">Siama</option>
@@ -44,7 +44,7 @@
 
 		</div>
 		<video width="320" height="240" controls onloadstart="this.playbackRate=0.75">
-                    <source src="{{ url_for('serve_video', filename=video) }}" type="video/mp4">
+                    <source src="{{ url_for('serve_video', filename=videoid+'.mp4') }}" type="video/mp4">
                     Your browser does not support the video tag.
                 </video>
             </div>

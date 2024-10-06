@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kitty Visits</title>
+<style>
+#video-gallary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-around;
+  align-content: center;
+}
+.video-container {
+  text-align: center;
+}
+.video-header {
+  display: flex;
+  justify-content: space-between;
+}
+#header {
+  text-align: center;
+}
+.pagination {
+  display: flex;
+  justify-content: center;
+  padding: 10px;
+}
+.pagination a{
+  margin: 0 5px;
+  padding: 8px 16px;
+  text-decoration: none;
+  color: #007bff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+.pagination strong {
+  margin: 0 5px;
+  padding: 8px 16px;
+  background-color: #007bff;
+  color: white;
+  border-radius: 4px;
+}
+</style>
+</head>
+<body>
+    <div id="header">
+	<a href="/">Go back to livestream</a>
+    	<h1>Kitty visits (Admin)</h1>
+    </div>
+    <div id="controls">
+	    <form id="delete-form" action="/delete_videos" method="post">
+		    <button type="submit">Delete</button>
+	    </form>
+	    <form id="label-form" action="/save_labels" method="post">
+		    <button type="submit">Save Labels</button>
+	    </form>
+    </div>
+    <div id="video-gallary">
+        {% for (t, videoid) in video_files %}
+            <div class="video-container">
+		<div class="video-header">
+			<div> {{ t }} </div>
+			<div> 
+				<select form="label-form" name="label_{{videoid}}" id="{{videoid}}-label">
+					<option disabled selected value> </option>
+					<option value="xiaomao">Xiaomao</option>
+					<option value="siama">Siama</option>
+					<option value="possum">Possum</option>
+				</select>
+				<input type="checkbox" name="checked_video_ids" value="{{videoid}}" id="{{videoid}}-checkbox" form="delete-form" /> 
+			</div>
+
+		</div>
+		<video width="320" height="240" controls onloadstart="this.playbackRate=0.75">
+                    <source src="{{ url_for('serve_video', filename=videoid+'.mp4') }}" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+        {% endfor %}
+    </div>
+    <div class="pagination">
+    	{% if page > 1 %}
+		<a href="{{ url_for('admin', page=page-1)}}">&laquo; Previous</a>
+	{% endif %}
+
+	{% for p in range(1, total_pages+1) %}
+		{% if p==page %}
+			<strong> {{ p }} </strong>
+		{% else %}
+			<a href="{{ url_for('admin', page=p)}}">{{ p }}</a>
+		{% endif %}
+	{% endfor %}
+
+	{% if page < total_pages %}
+		<a href="{{url_for('admin', page=page+1)}}">Next &raquo;</a>
+	{% endif %}
+    </div>
+</body>
+</html>

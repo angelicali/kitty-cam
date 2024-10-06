@@ -1,5 +1,6 @@
 import cv2
 from ultralytics import YOLO
+from flask import Flask, jsonify, request
 import flask
 import atexit
 import time
@@ -17,13 +18,27 @@ app = flask.Flask('xiaomao-cam', static_folder='static')
 # Camera
 cap = cv2.VideoCapture(0)
 
+# Video labels
+def get_video_labels():
+    with open('video_labels.json', 'r') as f:
+        return json.load(f)
+
+def save_video_labels(video_labels):
+    with open('video_labels.json', 'w') as f:
+        json.dump(video_labels, f)
+
+video_labels = get_video_labels()
+
 def cleanup():
+    global video_labels
+    save_video_labels(video_labels)    
     cap.release()
 
 atexit.register(cleanup)
 
 DATETIME_FORMAT = '%Y%m%d%H%M%S'
 DETECTION_BLACKLIST = {'bowl', 'potted plant', 'vase', 'surfboard', 'keyboard', 'bench'}
+EXPECTED_DETECTION = {'cat', 'dog', 'person', 'bear'}
 
 latest_frame = None
 recorded_frames = []
@@ -35,6 +50,11 @@ def log_detected_activity(t, results, logs):
     object_names -= DETECTION_BLACKLIST
     if len(object_names) == 0:
         return False
+
+    unexpected_detections = object_names - EXPECTED_DETECTION
+    if len(unexpected_detections) > 0:
+        print(f"unexpected detection: {','.join(unexpected_detection)}")
+
     timestr = t.strftime(DATETIME_FORMAT)
     logs.append((timestr,','.join(sorted(object_names))))
     return True
@@ -127,22 +147,62 @@ def video_feed():
 def index():
 	return flask.render_template('index.html')
 
-@app.route('/activities')
-def activities():
+# TODO: retrieve video labels too
+def get_videos(max_videos=None):
     video_files = os.listdir('./static')
     video_files.sort(reverse=True)
     time_and_video = []
-    video_files = video_files[:20]
+    video_files = video_files if max_videos==None else video_files[:max_videos]
     for v in video_files:
         timestr = v.split('.')[0]
         dt = datetime.strptime(timestr, DATETIME_FORMAT)
-        time_and_video.append((dt.strftime('%Y-%m-%d %H:%M'), v))
+        time_and_video.append((dt.strftime('%Y-%m-%d %H:%M'), timestr))
+    return time_and_video
 
-    return flask.render_template('videos.html', video_files=time_and_video)
+@app.route('/activities')
+def activities():
+    time_and_videoid = get_videos(max_videos=20)
+    return flask.render_template('videos.html', video_files=time_and_videoid)
 
 @app.route('/static/<path:filename>')
 def serve_video(filename):
     return flask.send_from_directory('./static/', filename)
+
+# =====  Admin routes  =====
+
+@app.route('/admin')
+def admin():
+    time_and_videoid = get_videos()
+    page = request.args.get('page',1, type=int)
+    per_page = 20
+
+    start_idx = (page-1) * per_page
+    end_idx = start_idx + per_page
+
+    total_pages = (len(time_and_videoid) - 1) // per_page + 1
+
+    return flask.render_template("admin.html", video_files=time_and_videoid[start_idx:end_idx], page=page, total_pages=total_pages)
+
+@app.route('/delete_videos', methods=['POST'])
+def delete_videos():
+    form = request.form
+    print(form)
+    return jsonify(form)
+    # return redirect('/admin')
+
+@app.route('/save_labels', methods=['POST'])
+def save_labels():
+    global video_labels
+    response = {"updates":[]}
+    for key in request.form:
+        if key.startswith('label_'):
+            videoid = key.replace('label_', '')
+            selected_label = request.form[key]
+            video_labels[videoid] = selected_label
+            response['updates'].append((videoid, selected_label))
+    response['updated_video_labels'] = video_labels
+    return jsonify(response)
+    # return redirect('/admin')
 
 if __name__ == '__main__':
     camera_thread = threading.Thread(target=run_camera)
