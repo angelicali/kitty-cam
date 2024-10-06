@@ -18,10 +18,16 @@
   display: flex;
   justify-content: space-between;
 }
+#header {
+  text-align: center;
+}
 </style>
 </head>
 <body>
-    <h1>Videos</h1>
+    <div id="header">
+	<a href="/">Go back to livestream</a>
+    	<h1>Kitty visits</h1>
+    </div>
     <div id="video-gallary">
         {% for (t, video) in video_files %}
             <div class="video-container">
