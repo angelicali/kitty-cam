@@ -13,13 +13,13 @@ ul {
 <body>
     <h1>Videos</h1>
     <ul>
-        {% for video in video_files %}
+        {% for (t, video) in video_files %}
             <li>
-                <video width="320" height="240" controls onloadstart="this.playbackRate=0.75">
+		<p> {{ t }} </p>
+		    <video width="320" height="240" controls onloadstart="this.playbackRate=0.75">
                     <source src="{{ url_for('serve_video', filename=video) }}" type="video/mp4">
                     Your browser does not support the video tag.
                 </video>
-                <p>{{ video }}</p>
             </li>
         {% endfor %}
     </ul>

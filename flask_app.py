@@ -22,28 +22,28 @@ def cleanup():
 
 atexit.register(cleanup)
 
+DATETIME_FORMAT = '%Y%m%d%H%M%S'
+DETECTION_BLACKLIST = {'bowl', 'potted plant', 'vase', 'surfboard', 'keyboard', 'bench'}
 
 latest_frame = None
-
 recorded_frames = []
 recording_start_time = None
 
 def log_detected_activity(t, results, logs):
     objects = json.loads(results.to_json())
-    object_names = [obj['name'] for obj in objects]
-    if 'bowl' in object_names:
-        object_names.remove('bowl')
+    object_names = set([obj['name'] for obj in objects])
+    object_names -= DETECTION_BLACKLIST
     if len(object_names) == 0:
         return False
-    timestr = t.strftime('%Y%m%d%H%M%S')
-    logs.append((timestr,','.join(object_names)))
+    timestr = t.strftime(DATETIME_FORMAT)
+    logs.append((timestr,','.join(sorted(object_names))))
     return True
 
 def save_frames(frames, start_time):
     if len(frames) <= 1:
         return
 
-    timestr = start_time.strftime('%Y%m%d%H%M%S')
+    timestr = start_time.strftime(DATETIME_FORMAT)
     height, width, _ = frames[0].shape
     fourcc = cv2.VideoWriter_fourcc(*'avc1')
     video_writer = cv2.VideoWriter('./static/' + timestr + '.mp4', fourcc, 20.0, (width, height))
@@ -58,6 +58,16 @@ def flush_logs(logs):
     with open(filename, 'w') as f:
         lines = [f"{t} | {objects}\n" for t, objects in logs]
         f.writelines(lines)
+
+
+DAYTIME_GAP = 5 # seconds
+NIGHT_GAP = 15 # seconds
+
+def get_gap_tolerance(t):
+    if 7 < t.hour < 20:
+        return DAYTIME_GAP
+    else:
+        return NIGHT_GAP
 
 def run_camera():
     global latest_frame, recorded_frames
@@ -84,7 +94,7 @@ def run_camera():
 
         # If it's been a while since last detected anything, stop recording
         since_last_detection = t - last_detected
-        if recording and since_last_detection.total_seconds() > 5:
+        if recording and since_last_detection.total_seconds() > get_gap_tolerance(t): 
             recording = False
             save_frames(recorded_frames, recording_start_time)
             recorded_frames = []
@@ -121,7 +131,14 @@ def index():
 def activities():
     video_files = os.listdir('./static')
     video_files.sort(reverse=True)
-    return flask.render_template('videos.html', video_files=video_files)
+    time_and_video = []
+    video_files = video_files[:20]
+    for v in video_files:
+        timestr = v.split('.')[0]
+        dt = datetime.strptime(timestr, DATETIME_FORMAT)
+        time_and_video.append((dt.strftime('%Y-%m-%d %H:%M'), v))
+
+    return flask.render_template('videos.html', video_files=time_and_video)
 
 @app.route('/static/<path:filename>')
 def serve_video(filename):
