@@ -8,7 +8,6 @@ import json
 import threading
 import os
 
-
 ## Model
 model = YOLO("yolov5nu_ncnn_model")
 
@@ -25,9 +24,9 @@ atexit.register(cleanup)
 
 
 latest_frame = None
-detected_frames = []
-detection_start_time = None
-last_detected = datetime.now()
+
+recorded_frames = []
+recording_start_time = None
 
 def log_detected_activity(t, results, logs):
     objects = json.loads(results.to_json())
@@ -40,8 +39,11 @@ def log_detected_activity(t, results, logs):
     logs.append((timestr,','.join(object_names)))
     return True
 
-def save_frames(frames, detection_start_time):
-    timestr = detection_start_time.strftime('%Y%m%d%H%M%S')
+def save_frames(frames, start_time):
+    if len(frames) <= 1:
+        return
+
+    timestr = start_time.strftime('%Y%m%d%H%M%S')
     height, width, _ = frames[0].shape
     fourcc = cv2.VideoWriter_fourcc(*'avc1')
     video_writer = cv2.VideoWriter('./static/' + timestr + '.mp4', fourcc, 20.0, (width, height))
@@ -58,8 +60,10 @@ def flush_logs(logs):
         f.writelines(lines)
 
 def run_camera():
-    global latest_frame, detected_frames
+    global latest_frame, recorded_frames
     logs = []
+    last_detected = datetime.now()
+    recording = False
     while True:
         ret, frame = cap.read()
         t = datetime.now()
@@ -70,17 +74,25 @@ def run_camera():
         
         results = model(frame, verbose=False)[0]
         latest_frame = results.plot()
-        
+
+        # Check current frame
         if log_detected_activity(t, results, logs):
-            if len(detected_frames) == 0:
-                detection_start_time = datetime.now()
-            detected_frames.append(frame)
-            last_detected = datetime.now()
-        elif len(detected_frames)>0:
-            since_last_detection = datetime.now() - last_detected
-            if since_last_detection.total_seconds() > 10:
-                save_frames(detected_frames, detection_start_time)
-                detected_frames = []
+            if not recording:
+                recording = True
+                recording_start_time = t
+            last_detected = t
+
+        # If it's been a while since last detected anything, stop recording
+        since_last_detection = t - last_detected
+        if recording and since_last_detection.total_seconds() > 5:
+            recording = False
+            save_frames(recorded_frames, recording_start_time)
+            recorded_frames = []
+
+        # If recording (i.e. either current frame detected, or last detection was only a little bit ago)
+        if recording:
+            recorded_frames.append(frame)
+
 
         if len(logs)>=5000:
             flush_logs(logs)
