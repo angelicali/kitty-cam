@@ -5,24 +5,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kitty Visits</title>
 <style>
-ul {
-  list-style-type: none;
+#video-gallary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-around;
+  align-content: center;
+}
+.video-container {
+  text-align: center;
+}
+.video-header {
+  display: flex;
+  justify-content: space-between;
 }
 </style>
 </head>
 <body>
     <h1>Videos</h1>
-    <ul>
+    <div id="video-gallary">
         {% for (t, video) in video_files %}
-            <li>
-		<p> {{ t }} </p>
-		    <video width="320" height="240" controls onloadstart="this.playbackRate=0.75">
+            <div class="video-container">
+		<div class="video-header">
+			<div> {{ t }} </div>
+			<div> 
+				<select name="label" id="{{video.split('.')[0]}}-label">
+					<option disabled selected value> </option>
+					<option value="xiaomao">Xiaomao</option>
+					<option value="siama">Siama</option>
+					<option value="possum">Possum</option>
+				</select>
+			</div>
+
+		</div>
+		<video width="320" height="240" controls onloadstart="this.playbackRate=0.75">
                     <source src="{{ url_for('serve_video', filename=video) }}" type="video/mp4">
                     Your browser does not support the video tag.
                 </video>
-            </li>
+            </div>
         {% endfor %}
-    </ul>
+    </div>
 </body>
 </html>
 
