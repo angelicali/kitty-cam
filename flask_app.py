@@ -11,7 +11,8 @@ import os
 from collections import Counter
 
 ## Model
-model = YOLO("yolov5nu_ncnn_model")
+# model = YOLO("yolov5nu_ncnn_model")
+model = YOLO("yolov8n_ncnn_model")
 
 ## Flask App
 app = flask.Flask('xiaomao-cam', static_folder='static')
@@ -30,9 +31,10 @@ def save_video_labels(video_labels):
         json.dump(video_labels, f)
 
 video_labels = get_video_labels()
-LABEL_CODES_DISPLAY = {'xiaomao': "Xiao mao", "siama": "Siama", "possum": "Possum", "racoon": "Racoon", 'angelica':"Feeder"}
+LABEL_CODES_DISPLAY = {'xiaomao': "Xiao mao", "siama": "Siama", "possum": "Possum", "racoon": "Racoon", 'feeder':"Feeder"}
 LABEL_CODES_SELECT  = LABEL_CODES_DISPLAY.copy()
-LABEL_CODES_SELECT.update({'fp': "False Positive", 'angelica':"Angelica"})
+LABEL_CODES_SELECT.update({'fp': "False Positive", 'feeder':"Feeder", "person":"Person", "dogwalker": "Dog Walker"})
+LABELS_TO_HIDE = {"fp", "person", "dogwalker"}
 logs = []
 
 def cleanup():
@@ -44,9 +46,7 @@ def cleanup():
 atexit.register(cleanup)
 
 DATETIME_FORMAT = '%Y%m%d%H%M%S'
-DETECTION_BLACKLIST = {'bowl', 'potted plant', 'vase', 'surfboard', 'keyboard', 'bench', 'rose'}
-EXPECTED_DETECTION = {'cat', 'dog', 'person', 'bear', 'elephant', 'cow', 'bird'}
-
+DETECTION_BLACKLIST = {'bowl', 'potted plant', 'vase', 'surfboard', 'keyboard', 'bench'}
 
 latest_frame = None
 recorded_frames = []
@@ -66,10 +66,6 @@ def log_detected_activity(t, results, logs, detection_cnt):
 
     for obj in object_names:
         detection_cnt[obj] += 1
-
-    unexpected_detections = object_names - EXPECTED_DETECTION
-    if len(unexpected_detections) > 0:
-        print(f"unexpected detection: {','.join(unexpected_detections)}")
 
     timestr = t.strftime(DATETIME_FORMAT)
     logs.append((timestr,','.join(sorted(object_names))))
@@ -183,8 +179,8 @@ def get_videos(max_videos=None):
 
 @app.route('/activities')
 def activities():
-    time_and_videoid = get_videos(max_videos=30)
-    time_and_videoid = [(t,v) for t,v in time_and_videoid if video_labels.get(v, '') != 'ft'][:20]
+    time_and_videoid = get_videos(max_videos=35)
+    time_and_videoid = [(t,v) for t,v in time_and_videoid if video_labels.get(v, '') not in LABELS_TO_HIDE][:20]
     decoded_video_labels = {v:LABEL_CODES_DISPLAY[video_labels[v]] for _, v in time_and_videoid if v in video_labels} 
     return flask.render_template('videos.html', video_files=time_and_videoid, video_labels=decoded_video_labels)
 

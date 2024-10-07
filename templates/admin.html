@@ -52,14 +52,6 @@
 	<a href="/">Go back to livestream</a>
     	<h1>Kitty visits (Admin)</h1>
     </div>
-    <div id="controls">
-	    <form id="delete-form" action="/delete_videos" method="post">
-		    <button type="submit">Delete</button>
-	    </form>
-	    <form id="label-form" action="/save_labels" method="post">
-		    <button type="submit">Save Labels</button>
-	    </form>
-    </div>
     <div id="video-gallary">
         {% for (t, videoid) in video_files %}
             <div class="video-container">
@@ -86,6 +78,14 @@
                 </video>
             </div>
         {% endfor %}
+    </div>
+    <div id="controls">
+            <form id="delete-form" action="/delete_videos" method="post">
+                    <button type="submit">Delete</button>
+            </form>
+            <form id="label-form" action="/save_labels" method="post">
+                    <button type="submit">Save Labels</button>
+            </form>
     </div>
     <div class="pagination">
     	{% if page > 1 %}
