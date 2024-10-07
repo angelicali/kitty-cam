@@ -30,6 +30,9 @@ def save_video_labels(video_labels):
         json.dump(video_labels, f)
 
 video_labels = get_video_labels()
+LABEL_CODES_DISPLAY = {'xiaomao': "Xiao mao", "siama": "Siama", "possum": "Possum", "racoon": "Racoon", 'angelica':"Feeder"}
+LABEL_CODES_SELECT  = LABEL_CODES_DISPLAY.copy()
+LABEL_CODES_SELECT.update({'fp': "False Positive", 'angelica':"Angelica"})
 logs = []
 
 def cleanup():
@@ -180,8 +183,10 @@ def get_videos(max_videos=None):
 
 @app.route('/activities')
 def activities():
-    time_and_videoid = get_videos(max_videos=20)
-    return flask.render_template('videos.html', video_files=time_and_videoid)
+    time_and_videoid = get_videos(max_videos=30)
+    time_and_videoid = [(t,v) for t,v in time_and_videoid if video_labels.get(v, '') != 'ft'][:20]
+    decoded_video_labels = {v:LABEL_CODES_DISPLAY[video_labels[v]] for _, v in time_and_videoid if v in video_labels} 
+    return flask.render_template('videos.html', video_files=time_and_videoid, video_labels=decoded_video_labels)
 
 @app.route('/video/<path:filename>')
 def serve_video(filename):
@@ -202,7 +207,7 @@ def admin():
 
     total_pages = (len(time_and_videoid) - 1) // per_page + 1
 
-    return flask.render_template("admin.html", video_files=time_and_videoid[start_idx:end_idx], page=page, total_pages=total_pages)
+    return flask.render_template("admin.html", video_files=time_and_videoid[start_idx:end_idx], page=page, total_pages=total_pages, video_labels=video_labels, label_codes=LABEL_CODES_SELECT)
 
 @app.route('/delete_videos', methods=['POST'])
 def delete_videos():

@@ -34,12 +34,7 @@
 		<div class="video-header">
 			<div> {{ t }} </div>
 			<div> 
-				<select name="label" id="{{videoid}}-label">
-					<option disabled selected value> </option>
-					<option value="xiaomao">Xiaomao</option>
-					<option value="siama">Siama</option>
-					<option value="possum">Possum</option>
-				</select>
+				{{ video_labels.get(videoid, '') }}
 			</div>
 
 		</div>
