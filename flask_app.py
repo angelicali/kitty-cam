@@ -1,6 +1,6 @@
 import cv2
 from ultralytics import YOLO
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory, make_response
 import flask
 import atexit
 import time
@@ -15,6 +15,7 @@ model = YOLO("yolov5nu_ncnn_model")
 
 ## Flask App
 app = flask.Flask('xiaomao-cam', static_folder='static')
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800
 
 # Camera
 cap = cv2.VideoCapture(0)
@@ -182,9 +183,11 @@ def activities():
     time_and_videoid = get_videos(max_videos=20)
     return flask.render_template('videos.html', video_files=time_and_videoid)
 
-@app.route('/static/<path:filename>')
+@app.route('/video/<path:filename>')
 def serve_video(filename):
-    return flask.send_from_directory('./static/', filename)
+    response = make_response(send_from_directory('./static/', filename))
+    response.headers['Cache-Control'] = 'public, max-age=604800, immutable'
+    return response
 
 # =====  Admin routes  =====
 
