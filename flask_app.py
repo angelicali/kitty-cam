@@ -8,6 +8,7 @@ from datetime import datetime
 import json
 import threading
 import os
+from collections import Counter
 
 ## Model
 model = YOLO("yolov5nu_ncnn_model")
@@ -28,38 +29,49 @@ def save_video_labels(video_labels):
         json.dump(video_labels, f)
 
 video_labels = get_video_labels()
+logs = []
 
 def cleanup():
-    global video_labels
-    save_video_labels(video_labels)    
+    global video_labels, logs
+    save_video_labels(video_labels)
+    flush_logs(logs)
     cap.release()
 
 atexit.register(cleanup)
 
 DATETIME_FORMAT = '%Y%m%d%H%M%S'
 DETECTION_BLACKLIST = {'bowl', 'potted plant', 'vase', 'surfboard', 'keyboard', 'bench'}
-EXPECTED_DETECTION = {'cat', 'dog', 'person', 'bear'}
+EXPECTED_DETECTION = {'cat', 'dog', 'person', 'bear', 'elephant', 'cow', 'bird'}
+
 
 latest_frame = None
 recorded_frames = []
 recording_start_time = None
 
-def log_detected_activity(t, results, logs):
+# def keep_recording(detection_count):
+#    for obj in detection_count.items():
+#        if 
+
+
+def log_detected_activity(t, results, logs, detection_cnt):
     objects = json.loads(results.to_json())
     object_names = set([obj['name'] for obj in objects])
     object_names -= DETECTION_BLACKLIST
     if len(object_names) == 0:
         return False
 
+    for obj in object_names:
+        detection_cnt[obj] += 1
+
     unexpected_detections = object_names - EXPECTED_DETECTION
     if len(unexpected_detections) > 0:
-        print(f"unexpected detection: {','.join(unexpected_detection)}")
+        print(f"unexpected detection: {','.join(unexpected_detections)}")
 
     timestr = t.strftime(DATETIME_FORMAT)
     logs.append((timestr,','.join(sorted(object_names))))
     return True
 
-def save_frames(frames, start_time):
+def save_frames(frames, start_time, detection_cnt):
     if len(frames) <= 1:
         return
 
@@ -71,6 +83,9 @@ def save_frames(frames, start_time):
         video_writer.write(frame)
     video_writer.release()
 
+    with open(f'./logs/byvideo/{timestr}.json', 'w') as f:
+        json.dump(detection_cnt, f)
+
 def flush_logs(logs):
     t0 = logs[0][0]
     t1 = logs[-1][0]
@@ -80,7 +95,7 @@ def flush_logs(logs):
         f.writelines(lines)
 
 
-DAYTIME_GAP = 5 # seconds
+DAYTIME_GAP = 10 # seconds
 NIGHT_GAP = 15 # seconds
 
 def get_gap_tolerance(t):
@@ -90,10 +105,10 @@ def get_gap_tolerance(t):
         return NIGHT_GAP
 
 def run_camera():
-    global latest_frame, recorded_frames
-    logs = []
+    global latest_frame, recorded_frames, logs
     last_detected = datetime.now()
     recording = False
+    detection_cnt = Counter()
     while True:
         ret, frame = cap.read()
         t = datetime.now()
@@ -106,7 +121,7 @@ def run_camera():
         latest_frame = results.plot()
 
         # Check current frame
-        if log_detected_activity(t, results, logs):
+        if log_detected_activity(t, results, logs, detection_cnt):
             if not recording:
                 recording = True
                 recording_start_time = t
@@ -116,8 +131,9 @@ def run_camera():
         since_last_detection = t - last_detected
         if recording and since_last_detection.total_seconds() > get_gap_tolerance(t): 
             recording = False
-            save_frames(recorded_frames, recording_start_time)
+            save_frames(recorded_frames, recording_start_time, detection_cnt)
             recorded_frames = []
+            detection_cnt = Counter()
 
         # If recording (i.e. either current frame detected, or last detection was only a little bit ago)
         if recording:
