@@ -40,7 +40,7 @@ def cleanup():
 atexit.register(cleanup)
 
 DATETIME_FORMAT = '%Y%m%d%H%M%S'
-DETECTION_BLACKLIST = {'bowl', 'potted plant', 'vase', 'surfboard', 'keyboard', 'bench'}
+DETECTION_BLACKLIST = {'bowl', 'potted plant', 'vase', 'surfboard', 'keyboard', 'bench', 'rose'}
 EXPECTED_DETECTION = {'cat', 'dog', 'person', 'bear', 'elephant', 'cow', 'bird'}
 
 
@@ -87,6 +87,8 @@ def save_frames(frames, start_time, detection_cnt):
         json.dump(detection_cnt, f)
 
 def flush_logs(logs):
+    if len(logs) == 0:
+        return
     t0 = logs[0][0]
     t1 = logs[-1][0]
     filename = f"./logs/{t0}-{t1}.txt"
@@ -201,9 +203,16 @@ def admin():
 
 @app.route('/delete_videos', methods=['POST'])
 def delete_videos():
-    form = request.form
-    print(form)
-    return jsonify(form)
+    response = {"removed": [], "error": []}
+    video_ids = request.form.getlist('checked_video_ids')
+    for videoid in video_ids:
+        try:
+            filename = f'./static/{videoid}.mp4'
+            os.remove(filename)
+            response["removed"].append(filename)
+        except OSError as error:
+            response["error"].append(error)
+    return jsonify(response)
     # return redirect('/admin')
 
 @app.route('/save_labels', methods=['POST'])
