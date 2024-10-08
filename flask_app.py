@@ -52,17 +52,33 @@ latest_frame = None
 recorded_frames = []
 recording_start_time = None
 
-# def keep_recording(detection_count):
-#    for obj in detection_count.items():
-#        if 
+def near(box1, box2, delta=3):
+    for p in ['x1','y1','x2','y2']:
+        if abs(box1[p] - box2[p]) > delta:
+            return False
+    return True
 
+
+IMPOSSIBLE_LOC = {'x1':10, 'y1': 14, 'x2':142, 'y2':148}
+
+def filter_results(results):
+    objects = json.loads(results.to_json())
+    filtered = []
+    for obj in objects:
+        if obj['name'] in DETECTION_BLACKLIST:
+            continue
+
+        if near(obj['box'], IMPOSSIBLE_LOC):
+            continue
+        
+        filtered.append(obj)
+    return filtered
+        
 
 def log_detected_activity(t, results, logs, detection_cnt):
-    objects = json.loads(results.to_json())
-    object_names = set([obj['name'] for obj in objects])
-    object_names -= DETECTION_BLACKLIST
-    if len(object_names) == 0:
-        return False
+    filtered = filter_results(results)
+    if len(filtered) == 0:
+        return 
 
     for obj in object_names:
         detection_cnt[obj] += 1
@@ -72,7 +88,7 @@ def log_detected_activity(t, results, logs, detection_cnt):
     return True
 
 def save_frames(frames, start_time, detection_cnt):
-    if len(frames) <= 1:
+    if sum(detection_cnt.values()) <= 1:
         return
 
     timestr = start_time.strftime(DATETIME_FORMAT)
@@ -203,6 +219,7 @@ def admin():
 
     total_pages = (len(time_and_videoid) - 1) // per_page + 1
 
+    # TODO: display also detected objects per video, for videos for this page
     return flask.render_template("admin.html", video_files=time_and_videoid[start_idx:end_idx], page=page, total_pages=total_pages, video_labels=video_labels, label_codes=LABEL_CODES_SELECT)
 
 @app.route('/delete_videos', methods=['POST'])
