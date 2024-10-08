@@ -31,7 +31,7 @@ def save_video_labels(video_labels):
         json.dump(video_labels, f)
 
 video_labels = get_video_labels()
-LABEL_CODES_DISPLAY = {'xiaomao': "Xiao mao", "siama": "Siama", "possum": "Possum", "racoon": "Racoon", 'feeder':"Feeder"}
+LABEL_CODES_DISPLAY = {'xiaomao': "Xiao mao", "siama": "Siama", "possum": "Possum", "racoon": "Racoon", 'feeder':"Feeder", 'tabby': 'Tabby'}
 LABEL_CODES_SELECT  = LABEL_CODES_DISPLAY.copy()
 LABEL_CODES_SELECT.update({'fp': "False Positive", 'feeder':"Feeder", "person":"Person", "dogwalker": "Dog Walker"})
 LABELS_TO_HIDE = {"fp", "person", "dogwalker"}
@@ -80,11 +80,11 @@ def log_detected_activity(t, results, logs, detection_cnt):
     if len(filtered) == 0:
         return 
 
-    for obj in object_names:
-        detection_cnt[obj] += 1
+    for obj in filtered:
+        detection_cnt[obj['name']] += 1
 
     timestr = t.strftime(DATETIME_FORMAT)
-    logs.append((timestr,','.join(sorted(object_names))))
+    logs.append((timestr,str(filtered)))
     return True
 
 def save_frames(frames, start_time, detection_cnt):
