@@ -53,8 +53,7 @@ recorded_frames = []
 recording_start_time = None
 
 
-def log_detected_activity(t, results, logs, detection_cnt):
-    objects = json.loads(results.to_json())
+def log_detected_activity(t, objects, logs, detection_cnt):
     for obj in objects:
         detection_cnt[obj['name']] += 1
 
@@ -110,7 +109,7 @@ def run_camera():
             continue
         
         results = model(frame, verbose=False)[0]
-        objects = results.to_json()
+        objects = json.loads(results.to_json())
         if len(objects)!=0:
             latest_frame = results.plot()
             log_detected_activity(t, objects, logs, detection_cnt)
@@ -122,7 +121,8 @@ def run_camera():
                 flush_logs(logs)
                 logs = []
                 gc.collect()
-
+        else:
+            latest_frame = frame
 
         # If it's been a while since last detected anything, stop recording
         since_last_detection = t - last_detected
