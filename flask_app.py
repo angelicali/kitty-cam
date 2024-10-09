@@ -46,39 +46,12 @@ def cleanup():
 atexit.register(cleanup)
 
 DATETIME_FORMAT = '%Y%m%d%H%M%S'
-DETECTION_BLACKLIST = {'bowl', 'potted plant', 'vase', 'surfboard', 'keyboard', 'bench'}
 
 latest_frame = None
 # latest_frame_backsub = None
 recorded_frames = []
 recording_start_time = None
 
-def near(box1, box2, delta=4):
-    for p in ['x1','y1','x2','y2']:
-        if abs(box1[p] - box2[p]) > delta:
-            return False
-    return True
-
-
-IMPOSSIBLE_LOC = {'x1':10, 'y1': 14, 'x2':142, 'y2':148}
-BIRD_LOC = {'x1':523, 'y1':36, 'x2':546, 'y2':59}
-
-def filter_results(results):
-    objects = json.loads(results.to_json())
-    filtered = []
-    for obj in objects:
-        if obj['name'] in DETECTION_BLACKLIST:
-            continue
-
-        if near(obj['box'], IMPOSSIBLE_LOC):
-            continue
-
-        if obj['name']=='bird' and near(obj['box'], BIRD_LOC, delta=1):
-            continue
-        
-        filtered.append(obj)
-    return filtered
-        
 
 def log_detected_activity(t, results, logs, detection_cnt):
     objects = json.loads(results.to_json())
@@ -87,7 +60,6 @@ def log_detected_activity(t, results, logs, detection_cnt):
 
     timestr = t.strftime(DATETIME_FORMAT)
     logs.append((timestr,str(objects)))
-    return True
 
 def save_frames(frames, start_time, detection_cnt):
     if sum(detection_cnt.values()) <= 1:
@@ -138,15 +110,19 @@ def run_camera():
             continue
         
         results = model(frame, verbose=False)[0]
-        latest_frame = results.plot()
-        # latest_frame_backsub = back_sub.apply(frame)
-
-        # Check current frame
-        if log_detected_activity(t, results, logs, detection_cnt):
+        objects = results.to_json()
+        if len(objects)!=0:
+            latest_frame = results.plot()
+            log_detected_activity(t, objects, logs, detection_cnt)
             if not recording:
                 recording = True
                 recording_start_time = t
             last_detected = t
+            if len(logs)>=100:
+                flush_logs(logs)
+                logs = []
+                gc.collect()
+
 
         # If it's been a while since last detected anything, stop recording
         since_last_detection = t - last_detected
@@ -162,11 +138,6 @@ def run_camera():
             recorded_frames.append(frame)
 
 
-        if len(logs)>=500:
-            flush_logs(logs)
-            logs = []
-            gc.collect()
-            
 
 def get_video_feed(cap):
     while True:
