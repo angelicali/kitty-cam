@@ -61,7 +61,7 @@ def log_detected_activity(t, objects, logs, detection_cnt):
     logs.append((timestr,str(objects)))
 
 def save_frames(frames, start_time, detection_cnt):
-    if sum(detection_cnt.values()) <= 1:
+    if sum(detection_cnt.values()) <= 2:
         return
 
     timestr = start_time.strftime(DATETIME_FORMAT)
@@ -95,6 +95,7 @@ def get_gap_tolerance(t):
     else:
         return NIGHT_GAP
 
+
 def run_camera():
     global latest_frame, recorded_frames, logs
     last_detected = datetime.now()
@@ -110,9 +111,10 @@ def run_camera():
         
         results = model(frame, verbose=False)[0]
         objects = json.loads(results.to_json())
-        if len(objects)!=0:
+        filtered_objects = [obj for obj in objects if obj['confidence']>0.4]
+        if len(filtered_objects)!=0:
             latest_frame = results.plot()
-            log_detected_activity(t, objects, logs, detection_cnt)
+            log_detected_activity(t, filtere_objects, logs, detection_cnt)
             if not recording:
                 recording = True
                 recording_start_time = t
@@ -122,7 +124,9 @@ def run_camera():
                 logs = []
                 gc.collect()
         else:
+            sleep_time = 1 if len(objects)==0 else 0.5
             latest_frame = frame
+            time.sleep(sleep_time)
 
         # If it's been a while since last detected anything, stop recording
         since_last_detection = t - last_detected
