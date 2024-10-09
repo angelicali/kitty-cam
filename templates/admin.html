@@ -17,6 +17,7 @@
 .video-header {
   display: flex;
   justify-content: space-between;
+  width: 320;
 }
 #header {
   text-align: center;
@@ -57,6 +58,7 @@
             <div class="video-container">
 		<div class="video-header">
 			<div> {{ t }} </div>
+			<div> <a href="{{ url_for('serve_video', replay=True, filename=videoid+'.mp4') }}">R</a></div>
 			<div>
 				{% if videoid in video_labels %}
 					{{ video_labels[videoid] }}

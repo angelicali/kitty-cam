@@ -60,18 +60,21 @@ def log_detected_activity(t, objects, logs, detection_cnt):
     timestr = t.strftime(DATETIME_FORMAT)
     logs.append((timestr,str(objects)))
 
+def write_video(filename, frames):
+    height, width, _ = frames[0].shape
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')
+    video_writer = cv2.VideoWriter(filename, fourcc, 20.0, (width, height))
+    for frame in frames:
+        video_writer.write(frame)
+    video_writer.release()
+
+
 def save_frames(frames, start_time, detection_cnt):
     if sum(detection_cnt.values()) <= 2:
         return
 
     timestr = start_time.strftime(DATETIME_FORMAT)
-    height, width, _ = frames[0].shape
-    fourcc = cv2.VideoWriter_fourcc(*'avc1')
-    video_writer = cv2.VideoWriter('./static/' + timestr + '.mp4', fourcc, 20.0, (width, height))
-    for frame in frames:
-        video_writer.write(frame)
-    video_writer.release()
-
+    write_video(f"./static/{timestr}.mp4", frames)
     with open(f'./logs/byvideo/{timestr}.json', 'w') as f:
         json.dump(detection_cnt, f)
 
@@ -114,7 +117,7 @@ def run_camera():
         filtered_objects = [obj for obj in objects if obj['confidence']>0.4]
         if len(filtered_objects)!=0:
             latest_frame = results.plot()
-            log_detected_activity(t, filtere_objects, logs, detection_cnt)
+            log_detected_activity(t, filtered_objects, logs, detection_cnt)
             if not recording:
                 recording = True
                 recording_start_time = t
@@ -183,8 +186,37 @@ def activities():
     decoded_video_labels = {v:LABEL_CODES_DISPLAY[video_labels[v]] for _, v in time_and_videoid if v in video_labels} 
     return flask.render_template('videos.html', video_files=time_and_videoid, video_labels=decoded_video_labels)
 
+
+def annotate_video(filename):
+    print(f"annotating {filename}")
+    v = cv2.VideoCapture('./static/' + filename)
+    started = False
+    attempts_left = 10
+    frames = []
+    while v.isOpened():
+        ret, frame = v.read()
+        if not ret:
+            if started or attempts_left <= 0:
+                break
+            else:
+                time.sleep(1)
+                attempts_left -= 1
+                continue
+        started = True        
+        results = model(frame)[0]
+        frames.append(results.plot())
+    write_video("annotated_" + filename, frames)
+
+
+
 @app.route('/video/<path:filename>')
 def serve_video(filename):
+    replay = request.args.get('replay', default = False, type=bool)
+    if replay:
+        annotated_filename = 'annotated_' + filename
+        if not os.path.exists('./static/' + annotated_filename):
+            annotate_video(filename)
+        filename = annotated_filename
     response = make_response(send_from_directory('./static/', filename))
     response.headers['Cache-Control'] = 'public, max-age=604800, immutable'
     return response
