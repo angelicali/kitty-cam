@@ -9,10 +9,10 @@ import json
 import threading
 import os
 from collections import Counter
+import gc 
 
 ## Model
-# model = YOLO("yolov5nu_ncnn_model")
-model = YOLO("yolov8n_ncnn_model")
+model = YOLO("finetuned_ncnn_model")
 
 ## Flask App
 app = flask.Flask('xiaomao-cam', static_folder='static')
@@ -20,7 +20,6 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800
 
 # Camera
 cap = cv2.VideoCapture(0)
-# back_sub = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=25, detectShadows=True)
 
 # Video labels
 def get_video_labels():
@@ -82,19 +81,16 @@ def filter_results(results):
         
 
 def log_detected_activity(t, results, logs, detection_cnt):
-    filtered = filter_results(results)
-    if len(filtered) == 0:
-        return 
-
-    for obj in filtered:
+    objects = json.loads(results.to_json())
+    for obj in objects:
         detection_cnt[obj['name']] += 1
 
     timestr = t.strftime(DATETIME_FORMAT)
-    logs.append((timestr,str(filtered)))
+    logs.append((timestr,str(objects)))
     return True
 
 def save_frames(frames, start_time, detection_cnt):
-    if sum(detection_cnt.values()) <= 1 or detection_cnt.keys()==['bird']:
+    if sum(detection_cnt.values()) <= 1:
         return
 
     timestr = start_time.strftime(DATETIME_FORMAT)
@@ -159,6 +155,7 @@ def run_camera():
             save_frames(recorded_frames, recording_start_time, detection_cnt)
             recorded_frames = []
             detection_cnt = Counter()
+            gc.collect()
 
         # If recording (i.e. either current frame detected, or last detection was only a little bit ago)
         if recording:
@@ -168,6 +165,7 @@ def run_camera():
         if len(logs)>=500:
             flush_logs(logs)
             logs = []
+            gc.collect()
             
 
 def get_video_feed(cap):
