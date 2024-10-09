@@ -20,6 +20,7 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800
 
 # Camera
 cap = cv2.VideoCapture(0)
+# back_sub = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=25, detectShadows=True)
 
 # Video labels
 def get_video_labels():
@@ -49,10 +50,11 @@ DATETIME_FORMAT = '%Y%m%d%H%M%S'
 DETECTION_BLACKLIST = {'bowl', 'potted plant', 'vase', 'surfboard', 'keyboard', 'bench'}
 
 latest_frame = None
+# latest_frame_backsub = None
 recorded_frames = []
 recording_start_time = None
 
-def near(box1, box2, delta=3):
+def near(box1, box2, delta=4):
     for p in ['x1','y1','x2','y2']:
         if abs(box1[p] - box2[p]) > delta:
             return False
@@ -60,6 +62,7 @@ def near(box1, box2, delta=3):
 
 
 IMPOSSIBLE_LOC = {'x1':10, 'y1': 14, 'x2':142, 'y2':148}
+BIRD_LOC = {'x1':523, 'y1':36, 'x2':546, 'y2':59}
 
 def filter_results(results):
     objects = json.loads(results.to_json())
@@ -69,6 +72,9 @@ def filter_results(results):
             continue
 
         if near(obj['box'], IMPOSSIBLE_LOC):
+            continue
+
+        if obj['name']=='bird' and near(obj['box'], BIRD_LOC, delta=1):
             continue
         
         filtered.append(obj)
@@ -88,7 +94,7 @@ def log_detected_activity(t, results, logs, detection_cnt):
     return True
 
 def save_frames(frames, start_time, detection_cnt):
-    if sum(detection_cnt.values()) <= 1:
+    if sum(detection_cnt.values()) <= 1 or detection_cnt.keys()==['bird']:
         return
 
     timestr = start_time.strftime(DATETIME_FORMAT)
@@ -137,6 +143,7 @@ def run_camera():
         
         results = model(frame, verbose=False)[0]
         latest_frame = results.plot()
+        # latest_frame_backsub = back_sub.apply(frame)
 
         # Check current frame
         if log_detected_activity(t, results, logs, detection_cnt):
@@ -158,16 +165,16 @@ def run_camera():
             recorded_frames.append(frame)
 
 
-        if len(logs)>=5000:
+        if len(logs)>=500:
             flush_logs(logs)
             logs = []
             
 
 def get_video_feed(cap):
-    global latest_frame
     while True:
-        if latest_frame is not None:
-            ret, buf = cv2.imencode('.jpg', latest_frame)
+        frame = latest_frame
+        if frame is not None:
+            ret, buf = cv2.imencode('.jpg', frame)
             yield (b'--frame\r\n'
                 b'Content-Type: image/jpeg\r\n\r\n'
 				+ buf.tobytes() + b'\r\n')
@@ -176,6 +183,9 @@ def get_video_feed(cap):
 @app.route('/video_feed')
 def video_feed():
 	return flask.Response(get_video_feed(cap), mimetype='multipart/x-mixed-replace;boundary=frame')
+
+# @app.route('/video_feed_backsub')
+
 
 @app.route('/')
 def index():
