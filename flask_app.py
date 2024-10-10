@@ -46,16 +46,22 @@ def cleanup():
 atexit.register(cleanup)
 
 DATETIME_FORMAT = '%Y%m%d%H%M%S'
+DATETIME_FORMAT_READABLE = '%Y/%m/%d %H:%M'
 
 latest_frame = None
 # latest_frame_backsub = None
 recorded_frames = []
 recording_start_time = None
-
+last_activity_time = datetime.strptime(sorted(os.listdir('./static'), reverse=True)[0].split('.')[0], DATETIME_FORMAT)
 
 def log_detected_activity(t, objects, logs, detection_cnt, threshold=0.4):
+    if len(objects)==0:
+        return []
+
     filtered_objects = []
     for obj in objects:
+        if obj['name'] == "tabby":
+            continue
         if obj['confidence'] >= threshold:
             detection_cnt[obj['name']] += 1
             filtered_objects.append(obj)
@@ -78,10 +84,12 @@ def save_frames(frames, start_time, detection_cnt):
     if sum(detection_cnt.values()) <= 2:
         return
 
+    global last_activity_time
     timestr = start_time.strftime(DATETIME_FORMAT)
     write_video(f"./static/{timestr}.mp4", frames)
     with open(f'./logs/byvideo/{timestr}.json', 'w') as f:
         json.dump(detection_cnt, f)
+    last_activity_time = start_time
 
 def flush_logs(logs):
     if len(logs) == 0:
@@ -117,6 +125,10 @@ def run_camera():
             time.sleep(1)
             continue
         
+        # 0.88 MB per frame
+        # frame_memory = frame.nbytes / (1024*1024)
+        # print(f"Frame size: {frame_memory: .2f} MB")
+
         results = model(frame, verbose=False)[0]
         objects = json.loads(results.to_json())
         filtered_objects = log_detected_activity(t, objects, logs, detection_cnt, threshold=0.35)
@@ -124,6 +136,7 @@ def run_camera():
         if len(filtered_objects)!=0:
             latest_frame = results.plot()
             if not recording:
+                gc.collect()
                 recording = True
                 recording_start_time = t
             last_detected = t
@@ -134,7 +147,7 @@ def run_camera():
         else:
             latest_frame = frame
             if not recording:
-                time.sleep(0.5)
+                time.sleep(0.75)
 
         # If it's been a while since last detected anything, stop recording
         since_last_detection = t - last_detected
@@ -148,7 +161,13 @@ def run_camera():
         # If recording (i.e. either current frame detected, or last detection was only a little bit ago)
         if recording:
             recorded_frames.append(frame)
-
+            if len(recorded_frames) >= 1000:
+                save_frames(recorded_frames, recording_start_time, detection_cnt)
+                recorded_frames = []
+                detection_cnt = Counter()
+                recording_start_time = datetime.now()
+                gc.collect()
+            
 
 
 def get_video_feed(cap):
@@ -170,7 +189,7 @@ def video_feed():
 
 @app.route('/')
 def index():
-	return flask.render_template('index.html')
+	return flask.render_template('index.html', last_activity_time=last_activity_time.strftime(DATETIME_FORMAT_READABLE))
 
 # TODO: retrieve video labels too
 def get_videos(max_videos=None):

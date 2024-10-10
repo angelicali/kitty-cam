@@ -20,7 +20,7 @@
 a:link, a:visited {
   background-color: #cacaca;
   color: #0b0b0b;
-  padding: 14px 25px;
+  padding: 10px 10px;
   text-align: center;
   text-decoration: none;
   display: inline-block;
@@ -35,6 +35,7 @@ a:hover, a:active {
 <body class="center">
    <h1> xiao mao?</h1>
    <img id='livevideo' src="{{ url_for('video_feed') }}" width="100%" class="center">
+   <p>Last active at {{ last_activity_time }} </p>
    <a href='/activities'>View History</a>
 </body>
 </html>
