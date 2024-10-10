@@ -29,7 +29,7 @@ DATETIME_FORMAT_READABLE = '%Y/%m/%d %H:%M'
 today = str(datetime.now().date())
 log_filename = f"./logs/{today}.log"
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename=log_filename, level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s',datefmt=DATETIME_FORMAT_READABLE)
+logging.basicConfig(filename=log_filename, level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Video labels
 def get_video_labels():
@@ -79,6 +79,7 @@ def run_camera():
 
         nonlocal video_writer
         if video_writer is None:
+            logger.info('Recording started')
             video_id = t.strftime(DATETIME_FORMAT)
             video_writer = cv2.VideoWriter(f'./static/{video_id}.mp4', fourcc, 20.0, (640, 480))
         video_writer.write(frame)
@@ -90,6 +91,7 @@ def run_camera():
         video_writer.release()
         video_writer = None
         latest_detection_time = datetime.now()
+        logger.info('Recording stopped')
 
     while True:
         ret, frame = cap.read()
@@ -131,10 +133,11 @@ def run_camera():
             time.sleep(0.75)
             continue 
         # Case 2: within gap tolerance: keep recording
-        if (t - last_detected).total_seconds() >= 10:
+        if (t - last_detected).total_seconds() <= 10:
             _start_or_keep_recording(t, frame)
         # Case 3: past gap tolerance: stop recording
         else:
+            logger.debug(f"current time: {t}; last_detected time: {last_detected}")
             _stop_recording()
 
 
