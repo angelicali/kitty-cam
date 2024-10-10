@@ -23,9 +23,9 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800
 cap = cv2.VideoCapture(0)
 
 # Logging
+today = str(datetime.now().date())
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename='app.log', level=logging.DEBUG)
-
+logging.basicConfig(filename=f'./logs/{today}.log', level=logging.DEBUG)
 
 # Video labels
 def get_video_labels():
@@ -52,42 +52,11 @@ atexit.register(cleanup)
 DATETIME_FORMAT = '%Y%m%d%H%M%S'
 DATETIME_FORMAT_READABLE = '%Y/%m/%d %H:%M'
 
-# Frame recording
+# Frame livestreaming 
 frame_event = threading.Event()
 latest_frame = None
-recorded_frames = []
-recording_start_time = None
+
 last_activity_time = datetime.strptime(sorted(os.listdir('./static'), reverse=True)[0].split('.')[0], DATETIME_FORMAT)
-
-def write_video(filename, frames):
-    height, width, _ = frames[0].shape
-    fourcc = cv2.VideoWriter_fourcc(*'avc1')
-    video_writer = cv2.VideoWriter(filename, fourcc, 20.0, (width, height))
-    for frame in frames:
-        video_writer.write(frame)
-    video_writer.release()
-
-
-def save_frames(frames, start_time, detection_cnt):
-    if sum(detection_cnt.values()) <= 2:
-        return
-
-    global last_activity_time
-    timestr = start_time.strftime(DATETIME_FORMAT)
-    write_video(f"./static/{timestr}.mp4", frames)
-    with open(f'./logs/byvideo/{timestr}.json', 'w') as f:
-        json.dump(detection_cnt, f)
-    last_activity_time = start_time
-
-
-DAYTIME_GAP = 10 # seconds
-NIGHT_GAP = 15 # seconds
-
-def get_gap_tolerance(t):
-    if 7 <= t.hour <= 20:
-        return DAYTIME_GAP
-    else:
-        return NIGHT_GAP
 
 
 def update_frame(new_frame):
@@ -99,7 +68,25 @@ def run_camera():
     global latest_frame, recorded_frames
     last_detected = datetime.now()
     recording = False
-    detection_cnt = Counter()
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')
+    video_writer = None
+
+    def _start_or_keep_recording(t, frame):
+        if frame is None:
+            return
+
+        nonlocal video_writer
+        if video_writer is None:
+            video_id = t.strftime(DATETIME_FORMAT)
+            video_writer = cv2.VideoWriter(f'./static/{video_id}.mp4', fourcc, 20.0, (640, 480))
+        video_writer.write(frame)
+
+    def _stop_recording():
+        nonlocal recording, video_writer
+        recording = False
+        video_writer.release()
+        video_writer = None
+
     while True:
         ret, frame = cap.read()
         t = datetime.now()
@@ -117,43 +104,34 @@ def run_camera():
 
         results = model(frame, verbose=False)[0]
         objects = json.loads(results.to_json())
+        
+        # Log objects if any, and update livestream frame
         if len(objects) != 0:
             logger.info(objects)
-        
-        filtered_objects = [obj for obj in objects if obj['name'] != 'tabby' and obj['confidence']>=0.35]
-        
-        if len(filtered_objects)!=0:
             update_frame(results.plot())
-            detection_cnt.update([obj['name'] for obj in filtered_objects])
-            if not recording:
-                gc.collect()
-                recording = True
-                recording_start_time = t
-            last_detected = t
         else:
             update_frame(frame)
-            if not recording:
-                time.sleep(0.75)
+        
+        filtered_objects = [obj['name'] for obj in objects if obj['name'] != 'tabby' and obj['confidence']>=0.35]
+        
+        # If detected anything this frame, record frame and continue
+        if len(filtered_objects)>0:
+            recording = True
+            last_detected = t
+            _start_or_keep_recording(t, frame)
+            continue
 
-        # If it's been a while since last detected anything, stop recording
-        since_last_detection = t - last_detected
-        if recording and since_last_detection.total_seconds() > get_gap_tolerance(t): 
-            recording = False
-            save_frames(recorded_frames, recording_start_time, detection_cnt)
-            recorded_frames = []
-            detection_cnt = Counter()
-            gc.collect()
-
-        # If recording (i.e. either current frame detected, or last detection was only a little bit ago)
-        if recording:
-            recorded_frames.append(frame)
-            if len(recorded_frames) >= 1000:
-                save_frames(recorded_frames, recording_start_time, detection_cnt)
-                recorded_frames = []
-                detection_cnt = Counter()
-                recording_start_time = datetime.now()
-                gc.collect()
-            
+        # If didn't detect anything this frame:
+        # Case 1: wasn't recording: sleep and continue
+        if not recording:
+            time.sleep(0.75)
+            continue 
+        # Case 2: within gap tolerance: keep recording
+        if (t - last_detected).total_seconds() >= 10:
+            _start_or_keep_recording(t, frame)
+        # Case 3: past gap tolerance: stop recording
+        else:
+            _stop_recording()
 
 
 def get_video_feed(cap):
@@ -172,7 +150,6 @@ def get_video_feed(cap):
 def video_feed():
 	return flask.Response(get_video_feed(cap), mimetype='multipart/x-mixed-replace;boundary=frame')
 
-# @app.route('/video_feed_backsub')
 
 
 @app.route('/')
