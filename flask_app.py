@@ -23,9 +23,13 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800
 cap = cv2.VideoCapture(0)
 
 # Logging
+DATETIME_FORMAT = '%Y%m%d%H%M%S'
+DATETIME_FORMAT_READABLE = '%Y/%m/%d %H:%M'
+
 today = str(datetime.now().date())
+log_filename = f"./logs/{today}.log"
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename=f'./logs/{today}.log', level=logging.DEBUG)
+logging.basicConfig(filename=log_filename, level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s',datefmt=DATETIME_FORMAT_READABLE)
 
 # Video labels
 def get_video_labels():
@@ -49,14 +53,12 @@ def cleanup():
 
 atexit.register(cleanup)
 
-DATETIME_FORMAT = '%Y%m%d%H%M%S'
-DATETIME_FORMAT_READABLE = '%Y/%m/%d %H:%M'
 
 # Frame livestreaming 
 frame_event = threading.Event()
 latest_frame = None
 
-last_activity_time = datetime.strptime(sorted(os.listdir('./static'), reverse=True)[0].split('.')[0], DATETIME_FORMAT)
+latest_detection_time = datetime.strptime(sorted(os.listdir('./static'), reverse=True)[0].split('.')[0], DATETIME_FORMAT)
 
 
 def update_frame(new_frame):
@@ -82,10 +84,12 @@ def run_camera():
         video_writer.write(frame)
 
     def _stop_recording():
+        global latest_detection_time
         nonlocal recording, video_writer
         recording = False
         video_writer.release()
         video_writer = None
+        latest_detection_time = datetime.now()
 
     while True:
         ret, frame = cap.read()
@@ -107,12 +111,12 @@ def run_camera():
         
         # Log objects if any, and update livestream frame
         if len(objects) != 0:
-            logger.info(objects)
+            logger.info(f"{t.strftime(DATETIME_FORMAT_READABLE)} {objects}")
             update_frame(results.plot())
         else:
             update_frame(frame)
         
-        filtered_objects = [obj['name'] for obj in objects if obj['name'] != 'tabby' and obj['confidence']>=0.35]
+        filtered_objects = [obj['name'] for obj in objects if obj['confidence']>=0.35]
         
         # If detected anything this frame, record frame and continue
         if len(filtered_objects)>0:
@@ -154,7 +158,7 @@ def video_feed():
 
 @app.route('/')
 def index():
-	return flask.render_template('index.html', last_activity_time=last_activity_time.strftime(DATETIME_FORMAT_READABLE))
+	return flask.render_template('index.html', latest_detection_time=latest_detection_time.strftime(DATETIME_FORMAT_READABLE))
 
 # TODO: retrieve video labels too
 def get_videos(max_videos=None):
@@ -211,6 +215,12 @@ def serve_video(filename):
     return response
 
 # =====  Admin routes  =====
+
+@app.route('/logs')
+def view_logs():
+    with open(log_filename, 'r') as f:
+        log_content = f.read()
+    return flask.Response(log_content, mimetype='text/plain')
 
 @app.route('/admin')
 def admin():
