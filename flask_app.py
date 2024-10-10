@@ -52,8 +52,9 @@ atexit.register(cleanup)
 DATETIME_FORMAT = '%Y%m%d%H%M%S'
 DATETIME_FORMAT_READABLE = '%Y/%m/%d %H:%M'
 
+# Frame recording
+frame_event = threading.Event()
 latest_frame = None
-# latest_frame_backsub = None
 recorded_frames = []
 recording_start_time = None
 last_activity_time = datetime.strptime(sorted(os.listdir('./static'), reverse=True)[0].split('.')[0], DATETIME_FORMAT)
@@ -89,6 +90,11 @@ def get_gap_tolerance(t):
         return NIGHT_GAP
 
 
+def update_frame(new_frame):
+    global latest_frame
+    latest_frame = new_frame
+    frame_event.set()
+
 def run_camera():
     global latest_frame, recorded_frames
     last_detected = datetime.now()
@@ -98,10 +104,13 @@ def run_camera():
         ret, frame = cap.read()
         t = datetime.now()
         if not ret:
-            print("reading from camera failed")
+            logger.warning("reading from camera failed")
             time.sleep(1)
             continue
         
+        if frame.nbytes < 900000:
+            logger.warning(f"frame.nbytes: {frame.nbytes}")
+
         # 0.88 MB per frame
         # frame_memory = frame.nbytes / (1024*1024)
         # print(f"Frame size: {frame_memory: .2f} MB")
@@ -114,7 +123,7 @@ def run_camera():
         filtered_objects = [obj for obj in objects if obj['name'] != 'tabby' and obj['confidence']>=0.35]
         
         if len(filtered_objects)!=0:
-            latest_frame = results.plot()
+            update_frame(results.plot())
             detection_cnt.update([obj['name'] for obj in filtered_objects])
             if not recording:
                 gc.collect()
@@ -122,7 +131,7 @@ def run_camera():
                 recording_start_time = t
             last_detected = t
         else:
-            latest_frame = frame
+            update_frame(frame)
             if not recording:
                 time.sleep(0.75)
 
@@ -149,9 +158,11 @@ def run_camera():
 
 def get_video_feed(cap):
     while True:
-        frame = latest_frame
-        if frame is not None:
-            ret, buf = cv2.imencode('.jpg', frame)
+        frame_event.wait()
+        frame_event.clear()
+
+        if latest_frame is not None:
+            ret, buf = cv2.imencode('.jpg', latest_frame)
             yield (b'--frame\r\n'
                 b'Content-Type: image/jpeg\r\n\r\n'
 				+ buf.tobytes() + b'\r\n')
