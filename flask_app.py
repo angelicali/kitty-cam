@@ -53,12 +53,17 @@ recorded_frames = []
 recording_start_time = None
 
 
-def log_detected_activity(t, objects, logs, detection_cnt):
+def log_detected_activity(t, objects, logs, detection_cnt, threshold=0.4):
+    filtered_objects = []
     for obj in objects:
-        detection_cnt[obj['name']] += 1
+        if obj['confidence'] >= threshold:
+            detection_cnt[obj['name']] += 1
+            filtered_objects.append(obj)
 
     timestr = t.strftime(DATETIME_FORMAT)
     logs.append((timestr,str(objects)))
+
+    return filtered_objects
 
 def write_video(filename, frames):
     height, width, _ = frames[0].shape
@@ -93,7 +98,7 @@ DAYTIME_GAP = 10 # seconds
 NIGHT_GAP = 15 # seconds
 
 def get_gap_tolerance(t):
-    if 7 < t.hour < 20:
+    if 7 <= t.hour <= 20:
         return DAYTIME_GAP
     else:
         return NIGHT_GAP
@@ -114,10 +119,10 @@ def run_camera():
         
         results = model(frame, verbose=False)[0]
         objects = json.loads(results.to_json())
-        filtered_objects = [obj for obj in objects if obj['confidence']>0.4]
+        filtered_objects = log_detected_activity(t, objects, logs, detection_cnt, threshold=0.35)
+
         if len(filtered_objects)!=0:
             latest_frame = results.plot()
-            log_detected_activity(t, filtered_objects, logs, detection_cnt)
             if not recording:
                 recording = True
                 recording_start_time = t
@@ -127,9 +132,9 @@ def run_camera():
                 logs = []
                 gc.collect()
         else:
-            sleep_time = 1 if len(objects)==0 else 0.5
             latest_frame = frame
-            time.sleep(sleep_time)
+            if not recording:
+                time.sleep(0.5)
 
         # If it's been a while since last detected anything, stop recording
         since_last_detection = t - last_detected
