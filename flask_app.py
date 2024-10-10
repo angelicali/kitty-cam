@@ -1,3 +1,4 @@
+import logging
 import cv2
 from ultralytics import YOLO
 from flask import Flask, jsonify, request, send_from_directory, make_response
@@ -21,6 +22,11 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800
 # Camera
 cap = cv2.VideoCapture(0)
 
+# Logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(filename='app.log', level=logging.DEBUG)
+
+
 # Video labels
 def get_video_labels():
     with open('video_labels.json', 'r') as f:
@@ -35,12 +41,10 @@ LABEL_CODES_DISPLAY = {'xiaomao': "Xiao mao", "siama": "Siama", "possum": "Possu
 LABEL_CODES_SELECT  = LABEL_CODES_DISPLAY.copy()
 LABEL_CODES_SELECT.update({'fp': "False Positive", 'feeder':"Feeder", "person":"Person", "dogwalker": "Dog Walker"})
 LABELS_TO_HIDE = {"fp", "person", "dogwalker"}
-logs = []
 
 def cleanup():
-    global video_labels, logs
+    global video_labels
     save_video_labels(video_labels)
-    flush_logs(logs)
     cap.release()
 
 atexit.register(cleanup)
@@ -53,23 +57,6 @@ latest_frame = None
 recorded_frames = []
 recording_start_time = None
 last_activity_time = datetime.strptime(sorted(os.listdir('./static'), reverse=True)[0].split('.')[0], DATETIME_FORMAT)
-
-def log_detected_activity(t, objects, logs, detection_cnt, threshold=0.4):
-    if len(objects)==0:
-        return []
-
-    filtered_objects = []
-    for obj in objects:
-        if obj['name'] == "tabby":
-            continue
-        if obj['confidence'] >= threshold:
-            detection_cnt[obj['name']] += 1
-            filtered_objects.append(obj)
-
-    timestr = t.strftime(DATETIME_FORMAT)
-    logs.append((timestr,str(objects)))
-
-    return filtered_objects
 
 def write_video(filename, frames):
     height, width, _ = frames[0].shape
@@ -91,16 +78,6 @@ def save_frames(frames, start_time, detection_cnt):
         json.dump(detection_cnt, f)
     last_activity_time = start_time
 
-def flush_logs(logs):
-    if len(logs) == 0:
-        return
-    t0 = logs[0][0]
-    t1 = logs[-1][0]
-    filename = f"./logs/{t0}-{t1}.txt"
-    with open(filename, 'w') as f:
-        lines = [f"{t} | {objects}\n" for t, objects in logs]
-        f.writelines(lines)
-
 
 DAYTIME_GAP = 10 # seconds
 NIGHT_GAP = 15 # seconds
@@ -113,7 +90,7 @@ def get_gap_tolerance(t):
 
 
 def run_camera():
-    global latest_frame, recorded_frames, logs
+    global latest_frame, recorded_frames
     last_detected = datetime.now()
     recording = False
     detection_cnt = Counter()
@@ -131,19 +108,19 @@ def run_camera():
 
         results = model(frame, verbose=False)[0]
         objects = json.loads(results.to_json())
-        filtered_objects = log_detected_activity(t, objects, logs, detection_cnt, threshold=0.35)
-
+        if len(objects) != 0:
+            logger.info(objects)
+        
+        filtered_objects = [obj for obj in objects if obj['name'] != 'tabby' and obj['confidence']>=0.35]
+        
         if len(filtered_objects)!=0:
             latest_frame = results.plot()
+            detection_cnt.update([obj['name'] for obj in filtered_objects])
             if not recording:
                 gc.collect()
                 recording = True
                 recording_start_time = t
             last_detected = t
-            if len(logs)>=100:
-                flush_logs(logs)
-                logs = []
-                gc.collect()
         else:
             latest_frame = frame
             if not recording:
