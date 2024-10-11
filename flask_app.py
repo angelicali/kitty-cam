@@ -66,6 +66,16 @@ def update_frame(new_frame):
     latest_frame = new_frame
     frame_event.set()
 
+def pass_threshold(obj):
+    if obj['name'] == 'possum' and 5 <= datetime.now().hour <= 20:
+        logger.debug("detected possum at unlikely hour")
+        return False
+    
+    if obj['name'] in ['possum', 'tabby']:
+        return obj['confidence'] >= 0.8
+    else:
+        return obj['confidence'] >= 0.5
+
 def run_camera():
     global latest_frame, recorded_frames
     last_detected = datetime.now()
@@ -118,7 +128,7 @@ def run_camera():
         else:
             update_frame(frame)
         
-        filtered_objects = [obj['name'] for obj in objects if obj['confidence']>=0.35]
+        filtered_objects = [obj['name'] for obj in objects if pass_threshold(obj)]
         
         # If detected anything this frame, record frame and continue
         if len(filtered_objects)>0:
