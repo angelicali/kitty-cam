@@ -74,7 +74,7 @@ def pass_threshold(obj):
     if obj['name'] in ['possum', 'tabby']:
         return obj['confidence'] >= 0.8
     else:
-        return obj['confidence'] >= 0.5
+        return obj['confidence'] >= 0.3
 
 def run_camera():
     global latest_frame, recorded_frames
@@ -143,7 +143,7 @@ def run_camera():
             time.sleep(0.75)
             continue 
         # Case 2: within gap tolerance: keep recording
-        if (t - last_detected).total_seconds() <= 10:
+        if (t - last_detected).total_seconds() <= 15:
             _start_or_keep_recording(t, frame)
         # Case 3: past gap tolerance: stop recording
         else:
