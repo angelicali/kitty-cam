@@ -80,7 +80,7 @@ def run_camera():
     global latest_frame, recorded_frames
     last_detected = datetime.now()
     recording = False
-    fourcc = cv2.VideoWriter_fourcc(*'avc1')
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     video_writer = None
 
     def _start_or_keep_recording(t, frame):
@@ -92,6 +92,11 @@ def run_camera():
             logger.info('Recording started')
             video_id = t.strftime(DATETIME_FORMAT)
             video_writer = cv2.VideoWriter(f'./static/{video_id}.mp4', fourcc, 20.0, (640, 480))
+
+        if not video_writer.isOpened():
+            logger.error("video writer is not opened!")
+            return
+
         video_writer.write(frame)
 
     def _stop_recording():
@@ -123,7 +128,7 @@ def run_camera():
         
         # Log objects if any, and update livestream frame
         if len(objects) != 0:
-            logger.info(f"{t.strftime(DATETIME_FORMAT_READABLE)} {objects}")
+            logger.info(str(objects))
             update_frame(results.plot())
         else:
             update_frame(frame)
