@@ -1,7 +1,7 @@
 description: Ultralytics best model trained on data.yaml
 author: Ultralytics
-date: '2024-10-09T22:01:28.369122'
-version: 8.3.8
+date: '2024-10-24T16:57:54.282122'
+version: 8.3.13
 license: AGPL-3.0 License (https://ultralytics.com/license)
 docs: https://docs.ultralytics.com
 stride: 32
@@ -11,13 +11,8 @@ imgsz:
 - 640
 - 640
 names:
-  0: angelica
-  1: beth
-  2: charles
-  3: ilan
-  4: possum
-  5: racoon
-  6: siama
-  7: tabby
-  8: xiaohua
-  9: xiaomao
+  0: cat
+  1: person
+  2: possum
+  3: dog
+  4: raccoon
