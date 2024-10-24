@@ -11,6 +11,7 @@ import threading
 import os
 from collections import Counter
 import gc 
+import ffmpeg
 
 ## Model
 model = YOLO("finetuned_ncnn_model")
@@ -76,11 +77,33 @@ def pass_threshold(obj):
     else:
         return obj['confidence'] >= 0.3
 
+class VideoWriter():
+    def __init__(self, filename):
+        self.process = (
+                ffmpeg
+                .input('pipe:', format='rawvideo', pix_fmt='bgr24', s='640X480', r=20.0)
+                .output(filename, pix_fmt='yuv420p', vcodec='libx264')
+                .overwrite_output()
+                .run_async(pipe_stdin=True)
+                )
+    def write(self, frame):
+        self.process.stdin.write(frame.tobytes())
+
+    def release(self):
+        self.process.stdin.close()
+        self.process.wait()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.release()
+
+
 def run_camera():
     global latest_frame, recorded_frames
     last_detected = datetime.now()
     recording = False
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     video_writer = None
 
     def _start_or_keep_recording(t, frame):
@@ -91,11 +114,7 @@ def run_camera():
         if video_writer is None:
             logger.info('Recording started')
             video_id = t.strftime(DATETIME_FORMAT)
-            video_writer = cv2.VideoWriter(f'./static/{video_id}.mp4', fourcc, 20.0, (640, 480))
-
-        if not video_writer.isOpened():
-            logger.error("video writer is not opened!")
-            return
+            video_writer = VideoWriter(f'./static/{video_id}.mp4')
 
         video_writer.write(frame)
 
