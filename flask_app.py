@@ -68,14 +68,14 @@ def update_frame(new_frame):
     frame_event.set()
 
 def pass_threshold(obj):
-    if obj['name'] == 'possum' and 5 <= datetime.now().hour <= 20:
-        logger.debug("detected possum at unlikely hour")
-        return False
+    # if obj['name'] == 'possum' and 5 <= datetime.now().hour <= 20:
+    #   logger.debug("detected possum at unlikely hour")
+    #    return False
     
-    if obj['name'] in ['possum', 'tabby']:
-        return obj['confidence'] >= 0.8
-    else:
-        return obj['confidence'] >= 0.3
+    # if obj['name'] in ['possum', 'tabby']:
+    #    return obj['confidence'] >= 0.8
+    #else:
+    return obj['confidence'] >= 0.1
 
 class VideoWriter():
     def __init__(self, filename):
