@@ -2,4 +2,5 @@ app.log
 video_labels.json
 logs/
 static/
+trash-bin/
 yolov*

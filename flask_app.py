@@ -3,6 +3,7 @@ import cv2
 from ultralytics import YOLO
 from flask import Flask, jsonify, request, send_from_directory, make_response
 import flask
+from flask_cors import CORS
 import atexit
 import time
 from datetime import datetime
@@ -12,6 +13,7 @@ import os
 from collections import Counter
 import gc 
 import ffmpeg
+from pathlib import Path
 
 ## Model
 model = YOLO("finetuned_ncnn_model")
@@ -19,6 +21,7 @@ model = YOLO("finetuned_ncnn_model")
 ## Flask App
 app = flask.Flask('xiaomao-cam', static_folder='static')
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800
+CORS(app)
 
 # Camera
 cap = cv2.VideoCapture(0)
@@ -47,6 +50,11 @@ LABEL_CODES_SELECT  = LABEL_CODES_DISPLAY.copy()
 LABEL_CODES_SELECT.update({'fp': "False Positive", 'feeder':"Feeder", "person":"Person", "dogwalker": "Dog Walker"})
 LABELS_TO_HIDE = {"fp", "person", "dogwalker"}
 
+# Save video detection logs
+def save_video_detections(video_id, detections):
+    with open(f'logs/byvideo/{video_id}.json', 'w') as f:
+        json.dump(detections, f)
+
 def cleanup():
     global video_labels
     save_video_labels(video_labels)
@@ -58,7 +66,7 @@ atexit.register(cleanup)
 # Frame livestreaming 
 frame_event = threading.Event()
 latest_frame = None
-
+recording = False
 latest_detection_time = datetime.strptime(sorted(os.listdir('./static'), reverse=True)[0].split('.')[0], DATETIME_FORMAT)
 
 
@@ -101,16 +109,17 @@ class VideoWriter():
 
 
 def run_camera():
-    global latest_frame, recorded_frames
+    global latest_frame, recorded_frames, recording
     last_detected = datetime.now()
-    recording = False
     video_writer = None
+    video_detections = []
+    video_id = None
 
     def _start_or_keep_recording(t, frame):
         if frame is None:
             return
 
-        nonlocal video_writer
+        nonlocal video_writer, video_id
         if video_writer is None:
             logger.info('Recording started')
             video_id = t.strftime(DATETIME_FORMAT)
@@ -119,13 +128,14 @@ def run_camera():
         video_writer.write(frame)
 
     def _stop_recording():
-        global latest_detection_time
-        nonlocal recording, video_writer
+        global latest_detection_time, recording
+        nonlocal video_writer, video_detections, video_id
         recording = False
         video_writer.release()
         video_writer = None
         latest_detection_time = datetime.now()
         logger.info('Recording stopped')
+        save_video_detections(video_id, video_detections)
 
     while True:
         ret, frame = cap.read()
@@ -148,7 +158,11 @@ def run_camera():
         # Log objects if any, and update livestream frame
         if len(objects) != 0:
             logger.info(str(objects))
-            update_frame(results.plot())
+            annotated_frame = results.plot()
+            update_frame(annotated_frame)
+            logger.debug(f"annotated frame shape: {annotated_frame.shape}")
+            if recording:
+                video_detections.append((t.strftime(DATETIME_FORMAT_READABLE), results.to_json()))
         else:
             update_frame(frame)
         
@@ -164,7 +178,7 @@ def run_camera():
         # If didn't detect anything this frame:
         # Case 1: wasn't recording: sleep and continue
         if not recording:
-            time.sleep(0.75)
+            time.sleep(0.25)
             continue 
         # Case 2: within gap tolerance: keep recording
         if (t - last_detected).total_seconds() <= 15:
@@ -192,7 +206,6 @@ def video_feed():
 	return flask.Response(get_video_feed(cap), mimetype='multipart/x-mixed-replace;boundary=frame')
 
 
-
 @app.route('/')
 def index():
 	return flask.render_template('index.html', latest_detection_time=latest_detection_time.strftime(DATETIME_FORMAT_READABLE))
@@ -202,12 +215,19 @@ def get_videos(max_videos=None):
     video_files = os.listdir('./static')
     video_files.sort(reverse=True)
     time_and_video = []
-    video_files = video_files if max_videos==None else video_files[:max_videos]
+    if recording:
+        video_files = video_files[1:]
+    if max_videos is not None:
+        video_files = video_files[:max_videos]
     for v in video_files:
         timestr = v.split('.')[0]
         dt = datetime.strptime(timestr, DATETIME_FORMAT)
         time_and_video.append((dt.strftime('%Y-%m-%d %H:%M'), timestr))
     return time_and_video
+
+@app.route('/past-visits')
+def past_visists_metadata():
+    return get_videos()
 
 @app.route('/activities')
 def activities():
@@ -239,17 +259,27 @@ def annotate_video(filename):
 
 
 
-@app.route('/video/<path:filename>')
+@app.route('/video/<path:filename>', methods=['GET', 'DELETE'])
 def serve_video(filename):
-    replay = request.args.get('replay', default = False, type=bool)
-    if replay:
-        annotated_filename = 'annotated_' + filename
-        if not os.path.exists('./static/' + annotated_filename):
-            annotate_video(filename)
-        filename = annotated_filename
-    response = make_response(send_from_directory('./static/', filename))
-    response.headers['Cache-Control'] = 'public, max-age=604800, immutable'
-    return response
+    if request.method == 'GET':
+        replay = request.args.get('replay', default = False, type=bool)
+        if replay:
+            annotated_filename = 'annotated_' + filename
+            if not os.path.exists('./static/' + annotated_filename):
+                annotate_video(filename)
+            filename = annotated_filename
+        response = make_response(send_from_directory('./static/', filename))
+        response.headers['Cache-Control'] = 'public, max-age=604800, immutable'
+        return response
+    elif request.method == 'DELETE':
+        logger.debug(f"request deletion for {filename}")
+        video_path = Path(f'./static/{filename}')
+        if video_path.exists():
+            trashed_path = Path(f'./trash-bin/{filename}')
+            video_path.rename(trashed_path)
+            return f"Moved {filename} to trash bin"
+        else:
+            return f"file {filename} not found", 404
 
 # =====  Admin routes  =====
 
