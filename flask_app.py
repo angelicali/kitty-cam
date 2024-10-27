@@ -15,6 +15,8 @@ import gc
 import ffmpeg
 from pathlib import Path
 
+HOME_IP = os.getenv("HOME_IP")
+print("home ip is:", HOME_IP)
 ## Model
 model = YOLO("finetuned_ncnn_model")
 
@@ -29,6 +31,7 @@ cap = cv2.VideoCapture(0)
 # Logging
 DATETIME_FORMAT = '%Y%m%d%H%M%S'
 DATETIME_FORMAT_READABLE = '%Y/%m/%d %H:%M'
+DATETIME_FORMAT_READABLE_SECOND = '%Y/%m/%d %H:%M:%S'
 
 today = str(datetime.now().date())
 log_filename = f"./logs/{today}.log"
@@ -76,13 +79,6 @@ def update_frame(new_frame):
     frame_event.set()
 
 def pass_threshold(obj):
-    # if obj['name'] == 'possum' and 5 <= datetime.now().hour <= 20:
-    #   logger.debug("detected possum at unlikely hour")
-    #    return False
-    
-    # if obj['name'] in ['possum', 'tabby']:
-    #    return obj['confidence'] >= 0.8
-    #else:
     return obj['confidence'] >= 0.1
 
 class VideoWriter():
@@ -119,11 +115,12 @@ def run_camera():
         if frame is None:
             return
 
-        nonlocal video_writer, video_id
+        nonlocal video_writer, video_id, video_detections
         if video_writer is None:
             logger.info('Recording started')
             video_id = t.strftime(DATETIME_FORMAT)
             video_writer = VideoWriter(f'./static/{video_id}.mp4')
+            video_detections = []
 
         video_writer.write(frame)
 
@@ -136,6 +133,7 @@ def run_camera():
         latest_detection_time = datetime.now()
         logger.info('Recording stopped')
         save_video_detections(video_id, video_detections)
+        video_detections = []
 
     while True:
         ret, frame = cap.read()
@@ -158,11 +156,8 @@ def run_camera():
         # Log objects if any, and update livestream frame
         if len(objects) != 0:
             logger.info(str(objects))
-            annotated_frame = results.plot()
-            update_frame(annotated_frame)
-            logger.debug(f"annotated frame shape: {annotated_frame.shape}")
-            if recording:
-                video_detections.append((t.strftime(DATETIME_FORMAT_READABLE), results.to_json()))
+            update_frame(results.plot())
+            video_detections.append((t.strftime(DATETIME_FORMAT_READABLE_SECOND), objects))
         else:
             update_frame(frame)
         
@@ -272,14 +267,42 @@ def serve_video(filename):
         response.headers['Cache-Control'] = 'public, max-age=604800, immutable'
         return response
     elif request.method == 'DELETE':
-        logger.debug(f"request deletion for {filename}")
+        user_ip = request.remote_addr
+        if user_ip != HOME_IP:
+            return {"error": "Unauthorized"}, 403
+
         video_path = Path(f'./static/{filename}')
         if video_path.exists():
             trashed_path = Path(f'./trash-bin/{filename}')
             video_path.rename(trashed_path)
+            logger.info(f"deleting: moving {video_path} to {trashed_path}")
             return f"Moved {filename} to trash bin"
         else:
-            return f"file {filename} not found", 404
+            return {"error": f"file {filename} not found"}, 404
+
+@app.route('/undo-delete/<path:filename>', methods=['POST'])
+def undo_delete(filename):
+    user_ip = request.remote_addr
+    if user_ip != HOME_IP:
+        return {"error": "Unauthorized"}, 403
+
+    video_path = Path(f"./trash-bin/{filename}")
+    target_path = Path(f"./static/{filename}")
+    if video_path.exists():
+        video_path.rename(target_path)
+        logger.info(f"undoing delete: moving {video_path} to {target_path}")
+    else:
+        return {"error": f"file {filename} not found"}, 404
+
+@app.route('/video-log/<path:video_id>')
+def video_log(video_id):
+    logfile = Path(f'logs/byvideo/{video_id}.json')
+    if not logfile.exists():
+        return {"error": f"log for video {video_id} not found"}, 404
+    
+    with logfile.open('r') as f:
+        return json.load(f)
+
 
 # =====  Admin routes  =====
 
