@@ -38,6 +38,39 @@ log_filename = f"./logs/{today}.log"
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename=log_filename, level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
+recording = False
+
+def get_videos(max_videos=None):     
+    video_files = os.listdir('./static')
+    video_files.sort(reverse=True)          
+    time_and_video = []               
+    if recording:          
+        video_files = video_files[1:]
+    if max_videos is not None:           
+        video_files = video_files[:max_videos]
+    for v in video_files:                         
+        timestr = v.split('.')[0]
+        dt = datetime.strptime(timestr, DATETIME_FORMAT)
+        time_and_video.append((dt.strftime('%Y-%m-%d %H:%M'), timestr))
+    return time_and_video # readable timestamp (as header) and video id
+
+def get_video_logs():
+    logs = {}
+    videos = get_videos()    
+    for _, video_id in videos:    
+        if video_id < "20241026213043":    
+            break    
+        logfile = Path(f"logs/byvideo/{video_id}.json")    
+        if not logfile.exists():    
+            continue    
+        with logfile.open('r') as f:
+            logs[video_id] = json.load(f)
+    return logs
+
+
+video_logs = get_video_logs()
+
+
 # Video labels
 def get_video_labels():
     with open('video_labels.json', 'r') as f:
@@ -57,6 +90,9 @@ LABELS_TO_HIDE = {"fp", "person", "dogwalker"}
 def save_video_detections(video_id, detections):
     with open(f'logs/byvideo/{video_id}.json', 'w') as f:
         json.dump(detections, f)
+    
+    global video_logs
+    video_logs[video_id] = detections
 
 def cleanup():
     global video_labels
@@ -69,7 +105,6 @@ atexit.register(cleanup)
 # Frame livestreaming 
 frame_event = threading.Event()
 latest_frame = None
-recording = False
 latest_detection_time = datetime.strptime(sorted(os.listdir('./static'), reverse=True)[0].split('.')[0], DATETIME_FORMAT)
 
 
@@ -120,7 +155,7 @@ def run_camera():
             logger.info('Recording started')
             video_id = t.strftime(DATETIME_FORMAT)
             video_writer = VideoWriter(f'./static/{video_id}.mp4')
-            video_detections = []
+            video_detections = [video_detections[-1]] # it must  be non-empty, since detection is triggered
 
         video_writer.write(frame)
 
@@ -161,6 +196,7 @@ def run_camera():
         else:
             update_frame(frame)
         
+        # Recording logic, depending on whether detected objects pass threshold
         filtered_objects = [obj['name'] for obj in objects if pass_threshold(obj)]
         
         # If detected anything this frame, record frame and continue
@@ -204,21 +240,6 @@ def video_feed():
 @app.route('/')
 def index():
 	return flask.render_template('index.html', latest_detection_time=latest_detection_time.strftime(DATETIME_FORMAT_READABLE))
-
-# TODO: retrieve video labels too
-def get_videos(max_videos=None):
-    video_files = os.listdir('./static')
-    video_files.sort(reverse=True)
-    time_and_video = []
-    if recording:
-        video_files = video_files[1:]
-    if max_videos is not None:
-        video_files = video_files[:max_videos]
-    for v in video_files:
-        timestr = v.split('.')[0]
-        dt = datetime.strptime(timestr, DATETIME_FORMAT)
-        time_and_video.append((dt.strftime('%Y-%m-%d %H:%M'), timestr))
-    return time_and_video
 
 @app.route('/past-visits')
 def past_visists_metadata():
@@ -271,14 +292,23 @@ def serve_video(filename):
         if user_ip != HOME_IP:
             return {"error": "Unauthorized"}, 403
 
-        video_path = Path(f'./static/{filename}')
-        if video_path.exists():
-            trashed_path = Path(f'./trash-bin/{filename}')
-            video_path.rename(trashed_path)
-            logger.info(f"deleting: moving {video_path} to {trashed_path}")
-            return f"Moved {filename} to trash bin"
-        else:
+        filename = Path(filename)
+        video_id = filename.stem
+        video_dir = Path('static/')
+        log_dir = Path('logs/byvideo/')
+        video_path = video_dir / filename
+        video_log_path = log_dir / f"{video_id}.json"
+        if not video_path.exists():
             return {"error": f"file {filename} not found"}, 404
+        
+        trash_bin = Path('trash-bin')
+        video_path.rename(trash_bin / filename)
+        if video_log_path.exists():
+            video_log_path.rename(trash_bin / video_log_path.stem)
+            global video_logs
+            del video_logs[video_id]
+        logger.info(f"deleting: moving {video_path} to {trashed_path}")
+        return f"Moved {filename} to trash bin"
 
 @app.route('/undo-delete/<path:filename>', methods=['POST'])
 def undo_delete(filename):
@@ -286,23 +316,61 @@ def undo_delete(filename):
     if user_ip != HOME_IP:
         return {"error": "Unauthorized"}, 403
 
-    video_path = Path(f"./trash-bin/{filename}")
-    target_path = Path(f"./static/{filename}")
+    filename = Path(filename)
+    video_id = filename.stem
+    video_dir = Path('static/')
+    log_dir = Path('logs/byvideo/')
+    trash_bin = Path('trash-bin')
+    target_video_path = video_dir / filename
+    target_video_log_path = log_dir / f"{video_id}.json"
+    
+    video_path = trash_bin / filename
+    video_log_path = trash_bin / f"{video_id}.json"
     if video_path.exists():
-        video_path.rename(target_path)
+        video_path.rename(target_video_path)
+        if video_log_path.exists():
+            video_log_path.rename(target_video_log_path)
+            load_video_log(video_id)
         logger.info(f"undoing delete: moving {video_path} to {target_path}")
     else:
         return {"error": f"file {filename} not found"}, 404
 
 @app.route('/video-log/<path:video_id>')
 def video_log(video_id):
-    logfile = Path(f'logs/byvideo/{video_id}.json')
-    if not logfile.exists():
+    if video_id not in video_logs:
         return {"error": f"log for video {video_id} not found"}, 404
-    
-    with logfile.open('r') as f:
-        return json.load(f)
+    else:
+        return video_logs[video_id]
 
+def load_video_log(video_id):
+    global video_logs
+    logfile = f"logs/byvideo/{video_id}.json"
+    with logfile.open('r') as f:
+        video_logs[video_id] = json.load(f)
+
+@app.route('/locations/all')
+def locations_by_class():
+    results = {}
+    for video_id, logs in video_logs.items():
+        for timestamp, detections in logs:
+            for d in detections:
+                if d['name'] not in results:
+                    results[d['name']] = []
+                results[d['name']].append({
+                    'box': d['box'],
+                    'confidence': d['confidence']
+                    })
+    return results
+
+@app.route('/locations/<path:object_class>')
+def locations(object_class):
+    results = []
+    for video_id, logs in video_logs.items():
+        for timestamp, detections in logs:
+            for d in detections:
+                if d['name'] == object_class:
+                    results.append(d["box"])
+    return results
 
 # =====  Admin routes  =====
 
