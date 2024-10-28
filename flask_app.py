@@ -40,7 +40,7 @@ logging.basicConfig(filename=log_filename, level=logging.DEBUG, format='%(asctim
 
 recording = False
 
-def get_videos(max_videos=None):     
+def get_videos(max_videos=200):     
     video_files = os.listdir('./static')
     video_files.sort(reverse=True)          
     time_and_video = []               
@@ -234,7 +234,10 @@ def get_video_feed(cap):
 
 @app.route('/video_feed')
 def video_feed():
-	return flask.Response(get_video_feed(cap), mimetype='multipart/x-mixed-replace;boundary=frame')
+    response = flask.Response(get_video_feed(cap), mimetype='multipart/x-mixed-replace;boundary=frame')
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'ngrok-skip-browser-warning'
+    return response
 
 
 @app.route('/')
@@ -291,7 +294,7 @@ def serve_video(filename):
         response.headers['Cache-Control'] = 'public, max-age=604800, immutable'
         return response
     elif request.method == 'DELETE':
-        user_ip = request.remote_addr
+        user_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
         if not is_ip_authorized(user_ip):
             logger.debug(f"delete request from unauthorized ip: {user_ip}")
             return {"error": f"Unauthorized IP address: {user_ip}"}, 403
@@ -316,7 +319,7 @@ def serve_video(filename):
 
 @app.route('/undo-delete/<path:filename>', methods=['POST'])
 def undo_delete(filename):
-    user_ip = request.remote_addr
+    user_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if not is_ip_authorized(user_ip):
         return {"error": "Unauthorized"}, 403
 
