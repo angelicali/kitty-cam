@@ -369,7 +369,7 @@ def locations_by_class():
                     })
     return results
 
-@app.route('/locations/<path:object_class>')
+# @app.route('/locations/<path:object_class>')
 def locations(object_class):
     results = []
     for video_id, logs in video_logs.items():
@@ -403,7 +403,7 @@ def view_logs():
         log_content = f.read()
     return flask.Response(log_content, mimetype='text/plain')
 
-@app.route('/admin')
+# @app.route('/admin')
 def admin():
     time_and_videoid = get_videos()
     page = request.args.get('page',1, type=int)
@@ -417,7 +417,7 @@ def admin():
     # TODO: display also detected objects per video, for videos for this page
     return flask.render_template("admin.html", video_files=time_and_videoid[start_idx:end_idx], page=page, total_pages=total_pages, video_labels=video_labels, label_codes=LABEL_CODES_SELECT)
 
-@app.route('/delete_videos', methods=['POST'])
+# @app.route('/delete_videos', methods=['POST'])
 def delete_videos():
     response = {"removed": [], "error": []}
     video_ids = request.form.getlist('checked_video_ids')
@@ -431,7 +431,7 @@ def delete_videos():
     return jsonify(response)
     # return redirect('/admin')
 
-@app.route('/save_labels', methods=['POST'])
+# @app.route('/save_labels', methods=['POST'])
 def save_labels():
     global video_labels
     response = {"updates":[]}
