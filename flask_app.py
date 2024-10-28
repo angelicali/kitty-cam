@@ -58,7 +58,7 @@ def get_video_logs():
     logs = {}
     videos = get_videos()    
     for _, video_id in videos:    
-        if video_id < "20241026213043":    
+        if video_id == "20241026213043":    
             break    
         logfile = Path(f"logs/byvideo/{video_id}.json")    
         if not logfile.exists():    
@@ -274,6 +274,9 @@ def annotate_video(filename):
     write_video("annotated_" + filename, frames)
 
 
+def is_ip_authorized(user_ip):
+    return user_ip.startswith('192.168.') or user_ip == HOME_IP
+        
 
 @app.route('/video/<path:filename>', methods=['GET', 'DELETE'])
 def serve_video(filename):
@@ -289,8 +292,9 @@ def serve_video(filename):
         return response
     elif request.method == 'DELETE':
         user_ip = request.remote_addr
-        if user_ip != HOME_IP:
-            return {"error": "Unauthorized"}, 403
+        if not is_ip_authorized(user_ip):
+            logger.debug(f"delete request from unauthorized ip: {user_ip}")
+            return {"error": f"Unauthorized IP address: {user_ip}"}, 403
 
         filename = Path(filename)
         video_id = filename.stem
@@ -307,13 +311,13 @@ def serve_video(filename):
             video_log_path.rename(trash_bin / video_log_path.stem)
             global video_logs
             del video_logs[video_id]
-        logger.info(f"deleting: moving {video_path} to {trashed_path}")
+        logger.info(f"moved {video_path} to trash bin")
         return f"Moved {filename} to trash bin"
 
 @app.route('/undo-delete/<path:filename>', methods=['POST'])
 def undo_delete(filename):
     user_ip = request.remote_addr
-    if user_ip != HOME_IP:
+    if not is_ip_authorized(user_ip):
         return {"error": "Unauthorized"}, 403
 
     filename = Path(filename)
@@ -371,6 +375,22 @@ def locations(object_class):
                 if d['name'] == object_class:
                     results.append(d["box"])
     return results
+
+@app.route('/active-hour')
+def active_hour():
+    results = {}
+    for object_type in ("cat", "raccoon", "possum", "person"):
+        results[object_type] = [0]*24
+    for video_id, logs in video_logs.items():
+        for timestamp, detections in logs:
+            hour = datetime.strptime(timestamp, DATETIME_FORMAT_READABLE_SECOND).hour
+            for d in detections:
+                # TODO: count active hour only once even if multiple detections?
+                results[d['name']][hour] += 1
+    return results
+
+                
+                
 
 # =====  Admin routes  =====
 
