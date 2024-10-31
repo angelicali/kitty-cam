@@ -96,7 +96,7 @@ def save_video_detections(video_id, detections):
 
 def cleanup():
     global video_labels
-    save_video_labels(video_labels)
+    # save_video_labels(video_labels)
     cap.release()
 
 atexit.register(cleanup)
@@ -138,6 +138,10 @@ class VideoWriter():
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.release()
 
+
+def blur(frame, blur_size):
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    return cv2.GaussianBlur(gray, (blur_size, blur_size), 0)
 
 def run_camera():
     global latest_frame, recorded_frames, recording
@@ -311,7 +315,7 @@ def serve_video(filename):
         trash_bin = Path('trash-bin')
         video_path.rename(trash_bin / filename)
         if video_log_path.exists():
-            video_log_path.rename(trash_bin / video_log_path.stem)
+            video_log_path.rename(trash_bin / f"{video_log_path.stem}.json")
             global video_logs
             del video_logs[video_id]
         logger.info(f"moved {video_path} to trash bin")
