@@ -78,13 +78,13 @@ def write_location_analytics(data):
     write_analytics(data, ANALYTICS_LOCATION_DIR)
 
 def get_location_analytics(return_json=True):
-    get_analytics(ANALYTICS_LOCATION_DIR, return_json)
+    return get_analytics(ANALYTICS_LOCATION_DIR, return_json)
 
 def write_active_hour_analytics(data):
     write_analytics(data, ANALYTICS_ACTIVE_HOUR_DIR)
 
 def get_active_hour_analytics(return_json=True):
-    get_analytics(ANALYTICS_ACTIVE_HOUR_DIR, return_json)
+    return get_analytics(ANALYTICS_ACTIVE_HOUR_DIR, return_json)
 
 def delete_video(filename):
     filename = Path(filename)

@@ -1,7 +1,7 @@
 import cv2
 
 class MotionDetector():
-    def __init__(self, initial_frame, blur_size=21, threshold=25, min_area=100):
+    def __init__(self, initial_frame, blur_size=21, threshold=25, min_area=400):
         self.blur_size = blur_size
         self.threshold = threshold
         self.min_area = min_area
