@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 
 class MotionDetector():
     def __init__(self, initial_frame, blur_size=21, threshold=30, min_area=500):
@@ -15,26 +16,47 @@ class MotionDetector():
     
     def detect(self, frame):
         blurred_frame = self._blur(frame)
-        frame_delta = cv2.absdiff(self.prev_frame_blurred, blurred_frame)
+        raw_delta = cv2.absdiff(self.prev_frame_blurred, blurred_frame)
         self.prev_frame_blurred = blurred_frame
-        thresh = cv2.threshold(frame_delta, self.threshold, 255, cv2.THRESH_BINARY)[1]
-        thresh = cv2.dilate(thresh, None, iterations=2)
-        contours, _ = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        significant_motion = False
-        motion_regions = []
+
+        threshold_delta = cv2.threshold(raw_delta, self.threshold, 255, cv2.THRESH_BINARY)[1]
+        dilated_delta = cv2.dilate(threshold_delta, None, iterations=2)
+        contours, _ = cv2.findContours(dilated_delta.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        metics = {
+            'Raw Delta': {
+                'mean_change': np.mean(raw_delta),
+                'max_change': np.max(raw_delta),
+                'percent_changed': (raw_delta > self.threshold).mean() * 100
+            },
+            'Threshold Delta': {
+                'mean_change': np.mean(threshold_delta),
+                'max_change': np.max(threshold_delta),
+                'percent_changed': (threshold_delta > 0).mean() * 100
+            },
+            'Dilated Delta': {
+                'mean_change': np.mean(dilated_delta),
+                'max_change': np.max(dilated_delta),
+                'percent_changed': (dilated_delta > 0).mean() * 100
+            },
+            'Contour Analysis': {
+                'total_contour_area': sum(cv2.contourArea(c) for c in contours),
+                'contour_count': len(contours)
+            }
+        },
+
+        metics["motion_detected"] = False
+        metics['Motion Regions'] = []
 
         for contour in contours:
             contour_area = cv2.contourArea(contour)
             if contour_area > self.min_area:
-                significant_motion = True
+                metics["motion_detected"] = True
             (x, y, w, h) = cv2.boundingRect(contour)
-            motion_regions.append({'x': x, 'y': y, 'width': w, 'height': h, 'area': contour_area})
+            metics['Motion Regions'].append({'x': x, 'y': y, 'width': w, 'height': h, 'area': contour_area})
         
-        return {
-            "motion_detected": significant_motion,
-            "regions": motion_regions
-        }
-    
+        return metics
+
     def set_blur_size(self, blur_size):
         self.blur_size = blur_size
 
