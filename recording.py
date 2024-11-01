@@ -1,7 +1,7 @@
 """ Recording logic and utils for the camera. """
 import cv2
 from enum import Enum
-import datetime
+from datetime import datetime
 import ffmpeg
 import logging
 from pathlib import Path
@@ -45,7 +45,7 @@ class VideoLogger():
         self.logger.addHandler(self.file_handler)
     
     def log(self, data):
-        self.info(json.dumps(data))
+        self.logger.info(json.dumps(data))
     
     def close(self):
         self.logger.removeHandler(self.file_handler)
@@ -67,12 +67,19 @@ class CameraRecorder():
         self.video_logger = None
         self.last_detection_time = datetime.now()
 
+        self._clear_first_frames()
         _, self.latest_frame  = self.cap.read()
         self.motion_detector = MotionDetector(self.latest_frame)
         self.frame_event = threading.Event()
+        self.frame_event.set()
 
     def get_latest_frame(self):
         return self.latest_frame
+
+    def _clear_first_frames(self):
+        for i in range(10):
+            self.cap.read()
+            time.sleep(0.5)
 
     def run(self):
         while self.cap.isOpened():
@@ -86,8 +93,8 @@ class CameraRecorder():
     def _process(self, frame):
         t = datetime.now()
         results = self.motion_detector.detect(frame)
+        self.frame_event.set()
         if results['motion_detected']:
-            self.frame_event.set()
             self.last_detection_time = t
             if self.state == RecordingState.NOT_RECORDING:
                 self._prepare_recording(t.strftime(utils.DATETIME_FORMAT))
@@ -108,7 +115,7 @@ class CameraRecorder():
     def _prepare_recording(self, video_id):
         self.state = RecordingState.RECORDING
         self.video_logger = VideoLogger(video_id)
-        self.video_writer = VideoWriter(self.video_dir / (video_id + '.mp4'))
+        self.video_writer = VideoWriter(str(self.video_dir / (video_id + '.mp4')))
         self.logger.info(f"Recording started for {video_id}")
 
     def _record(self, frame, motion_detection_results, t):
@@ -129,6 +136,7 @@ class CameraRecorder():
         return self.state != RecordingState.NOT_RECORDING
     
     def cleanup(self):
-        self._stop_recording()
+        if self.is_recording():
+            self._stop_recording()
         self.cap.release()
     

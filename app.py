@@ -20,7 +20,8 @@ CORS(app) # TODO: is this correct?
 # Logging
 today = str(datetime.now().date())
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename=f"logs/{today}.log", level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+log_filename = f"logs/{today}.log"
+logging.basicConfig(filename=log_filename, level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 recorder = CameraRecorder(utils.VIDEO_DIR, logger)
@@ -37,14 +38,14 @@ def _get_livestream():
                b'Content-Type: image.jpeg\r\n\r\n'
                + buf.tobytes() + b'\r\n')
 
+# @app.route('/livestream')
 @app.route('/video_feed') # TODO: remove after migrating to '/livesrteam'
-@app.route('/livestream')
 def livestream():
     return Response(_get_livestream(), mimetype='multipart/x-mixed-replace;boundary=frame')
 
 @app.route('/past-visits')
 def past_visists():
-    return utils.get_video_list(50)
+    return utils.get_video_list(skip_latest=recorder.is_recording(), max_videos=50, include_timestr=True)
 
 def is_user_admin(request):
     user_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
@@ -63,6 +64,7 @@ def video_request(filename):
         if not is_user_admin(request):
             return {"error": f"Unauthorized"}, 403
         utils.delete_video(filename)
+        return f"deleted {filename}"
 
 @app.route('/video-log/<path:video_id>')
 def video_log(video_id):
@@ -77,6 +79,11 @@ def locations():
 def active_hour():
     return utils.get_active_hour_analytics()
 
+@app.route('/logs')
+def logs():
+    with open(log_filename, 'r') as f:
+        log_content = f.read()
+    return Response(log_content, mimetype='text/plain')
 
 if __name__ == '__main__':
     camera_thread = threading.Thread(target=recorder.run)

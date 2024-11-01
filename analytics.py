@@ -6,7 +6,9 @@ OBJECT_TYPES = ["cat", "raccoon", "possum"]
 
 def generate_location_analytics(logs):
     locations = {o: [] for o in OBJECT_TYPES}
-    for video_log in logs.values():
+    for k, video_log in logs.items():
+        if video_log is None:
+            print(k)
         for _, detection in video_log:
             for d in detection:
                 if d['name'] not in locations:
@@ -29,14 +31,14 @@ def generate_active_hour_analytics(logs):
             hour = datetime.strptime(timestamp, utils.DATETIME_FORMAT_READABLE_SECOND).hour
             objects = set([d['name'] for d in detection])
             for o in objects:
-                active_hours_data[o][hour] += 1
+                if o in OBJECT_TYPES:
+                    active_hours_data[o][hour] += 1
     return active_hours_data
         
 
 
 if __name__ == "__main__":
     logs = utils.get_video_logs()
-
     location_data = generate_location_analytics(logs)
     utils.write_location_analytics(location_data)
 

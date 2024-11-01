@@ -16,23 +16,33 @@ TRASH_DIR = Path('trash-bin')
 
 logger = logging.getLogger(__name__)
 
-def get_video_list(video_dir, skip_latest=False, max_videos=200):
-    video_files = list(video_dir.iterdir())
+def get_video_list(skip_latest=False, max_videos=200, include_timestr=False):
+    video_files = list(VIDEO_DIR.iterdir())
     video_files.sort(reverse=True)
     if skip_latest:
         video_files = video_files[1:]
     if max_videos is not None:
         video_files = video_files[:max_videos]
-    return video_files
+    if include_timestr:
+        results = []
+        for f in video_files:
+            timestr = f.stem
+            dt = datetime.strptime(timestr, DATETIME_FORMAT)
+            results.append((dt.strftime(DATETIME_FORMAT_READABLE), timestr))
+        return results
+    else:
+        return video_files
 
 def get_video_logs():
     logs = {}
-    videos = get_video_list(VIDEO_DIR)
+    videos = get_video_list()
     for video_filename in videos:
-        video_id = video_filename.split('.')[0]
+        video_id = video_filename.stem
         if video_id == "20241026213043":    
             break    
         video_log = get_video_log(video_id)
+        if video_log is None:
+            continue
         logs[video_id] = video_log
     return logs
 
@@ -57,7 +67,7 @@ def write_analytics(data, dir):
     today = str(datetime.now().date())
     output_path = dir / (today + '.json')
     with output_path.open('w') as f:
-        json.dumps(data, f)
+        json.dump(data, f)
 
 def get_analytics(dir, return_json):
     file = get_latest(dir)
@@ -81,14 +91,17 @@ def delete_video(filename):
     video_id = filename.stem
     video_path = VIDEO_DIR / filename
     video_log_path = VIDEO_LOG_DIR / f"{video_id}.json"
+    video_jsonl_log_path = VIDEO_LOG_DIR / f"{video_id}.jsonl"
     if video_path.exists():
         video_path.rename(TRASH_DIR / video_path.name)
         logger.info(f"File moved to trash-bin: {video_path}")
     else:
         logger.error(f"File for deletion can't be found: {video_path}")
     
-    if video_log_path.eixsts():
+    if video_log_path.exists():
         video_log_path.rename(TRASH_DIR / video_log_path.name)
         logger.info(f"File moved to trash-bin: {video_log_path}")
+    elif video_jsonl_log_path.exists():
+        video_jsonl_log_path.rename(TRASH_DIR / video_jsonl_log_path.name)
     else:
         logger.error(f"File for deletion can't be found: {video_log_path}")

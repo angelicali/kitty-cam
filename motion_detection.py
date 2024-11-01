@@ -1,13 +1,14 @@
 import cv2
 
 class MotionDetector():
-    def __init__(self, initial_frame, blur_size=21, threshold=25, min_area=500):
-        self.prev_frame_blurred =  MotionDetector.blur(initial_frame)
+    def __init__(self, initial_frame, blur_size=21, threshold=25, min_area=100):
         self.blur_size = blur_size
         self.threshold = threshold
         self.min_area = min_area
+        self.prev_frame_blurred = self._blur(initial_frame)
 
     def _blur(self, frame):
+        frame = frame.copy()
         # TODO: is the original frame modified?
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         return cv2.GaussianBlur(gray, (self.blur_size, self.blur_size), 0)
