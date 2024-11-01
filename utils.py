@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 import logging
+import ffmpeg
 
 DATETIME_FORMAT = '%Y%m%d%H%M%S'
 DATETIME_FORMAT_READABLE = '%Y/%m/%d %H:%M'
@@ -87,9 +88,11 @@ def get_active_hour_analytics(return_json=True):
     return get_analytics(ANALYTICS_ACTIVE_HOUR_DIR, return_json)
 
 def delete_video(filename):
-    filename = Path(filename)
-    video_id = filename.stem
-    video_path = VIDEO_DIR / filename
+    p = Path(filename)
+    delete_video_by_id(p.stem)
+
+def delete_video_by_id(video_id):
+    video_path = VIDEO_DIR / f"{video_id}.mp4"
     video_log_path = VIDEO_LOG_DIR / f"{video_id}.json"
     video_jsonl_log_path = VIDEO_LOG_DIR / f"{video_id}.jsonl"
     if video_path.exists():
@@ -105,3 +108,38 @@ def delete_video(filename):
         video_jsonl_log_path.rename(TRASH_DIR / video_jsonl_log_path.name)
     else:
         logger.error(f"File for deletion can't be found: {video_log_path}")
+
+def get_video_path(video_id):
+    return VIDEO_DIR / (video_id + '.mp4')
+
+def get_video_log_path(video_id, jsonl=True):
+    suffix = '.jsonl' if jsonl else '.json'
+    return VIDEO_LOG_DIR / (video_id + suffix)
+
+def merge(video_ids):
+    video_ids.sort()
+    new_video_id = video_ids[0]
+    
+    # Merge videos
+    filelist_name = f'tmp/merge_filelist_{new_video_id}.txt'
+    new_video_filename = VIDEO_DIR / ({new_video_id} + '_new.mp4')
+    with open(filelist_name, 'w') as f:
+        for video in video_ids:
+            f.write(f"file 'static/{video}.mp4'\n")
+    ffmpeg.input(filelist_name, format='concat', safe=0).output(str(new_video_filename), c='copy').run()
+
+    # Merge video logs
+    new_log_file = VIDEO_LOG_DIR / (new_video_id + '_new.jsonl')
+    with new_log_file.open('w') as wf:
+        for vid in video_ids:
+            file = VIDEO_DIR / (vid + '.mp4')
+            with file.open('r') as rf:
+                wf.write(rf.read())
+
+    # Delete old videos and logs
+    for vid in video_ids:
+        delete_video_by_id(vid)
+    
+    # Move new video and log to proper paths
+    new_video_filename.rename(get_video_path(new_video_id))
+    new_log_file.rename(get_video_log_path(new_video_id))
