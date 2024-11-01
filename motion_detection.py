@@ -1,7 +1,7 @@
 import cv2
 
 class MotionDetector():
-    def __init__(self, initial_frame, blur_size=21, threshold=25, min_area=400):
+    def __init__(self, initial_frame, blur_size=21, threshold=30, min_area=500):
         self.blur_size = blur_size
         self.threshold = threshold
         self.min_area = min_area
@@ -27,8 +27,8 @@ class MotionDetector():
             contour_area = cv2.contourArea(contour)
             if contour_area > self.min_area:
                 significant_motion = True
-                (x, y, w, h) = cv2.boundingRect(contour)
-                motion_regions.append({'x': x, 'y': y, 'width': w, 'height': h, 'area': contour_area})
+            (x, y, w, h) = cv2.boundingRect(contour)
+            motion_regions.append({'x': x, 'y': y, 'width': w, 'height': h, 'area': contour_area})
         
         return {
             "motion_detected": significant_motion,

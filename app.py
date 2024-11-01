@@ -38,14 +38,13 @@ def _get_livestream():
                b'Content-Type: image.jpeg\r\n\r\n'
                + buf.tobytes() + b'\r\n')
 
-# @app.route('/livestream')
-@app.route('/video_feed') # TODO: remove after migrating to '/livesrteam'
+@app.route('/livestream')
 def livestream():
     return Response(_get_livestream(), mimetype='multipart/x-mixed-replace;boundary=frame')
 
 @app.route('/past-visits')
 def past_visists():
-    return utils.get_video_list(skip_latest=recorder.is_recording(), max_videos=50, include_timestr=True)
+    return utils.get_video_list(skip_latest=recorder.is_recording(), max_videos=50, return_id=True)
 
 def is_user_admin(request):
     user_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
@@ -54,17 +53,17 @@ def is_user_admin(request):
         logger.debug(f"unauthorized ip: {user_ip}")
     return authorized
 
-@app.route('/video/<path:filename>', methods=['GET', 'DELETE'])
-def video_request(filename):
+@app.route('/video/<path:video_id>', methods=['GET', 'DELETE'])
+def video_request(video_id):
     if request.method == 'GET':
-        response = make_response(send_from_directory(str(utils.VIDEO_DIR), filename))
+        response = make_response(send_from_directory(str(utils.VIDEO_DIR), f"{video_id}.mp4"))
         response.headers['Cache-Control'] = 'public, max-age=604800, immutable'
         return response
     elif request.method == 'DELETE':
         if not is_user_admin(request):
             return {"error": f"Unauthorized"}, 403
-        utils.delete_video(filename)
-        return f"deleted {filename}"
+        utils.delete_video_by_id(video_id)
+        return f"deleted {video_id}"
 
 @app.route('/video-log/<path:video_id>')
 def video_log(video_id):

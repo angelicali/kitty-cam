@@ -17,20 +17,15 @@ TRASH_DIR = Path('trash-bin')
 
 logger = logging.getLogger(__name__)
 
-def get_video_list(skip_latest=False, max_videos=200, include_timestr=False):
+def get_video_list(skip_latest=False, max_videos=200, return_id=False):
     video_files = list(VIDEO_DIR.iterdir())
     video_files.sort(reverse=True)
     if skip_latest:
         video_files = video_files[1:]
     if max_videos is not None:
         video_files = video_files[:max_videos]
-    if include_timestr:
-        results = []
-        for f in video_files:
-            timestr = f.stem
-            dt = datetime.strptime(timestr, DATETIME_FORMAT)
-            results.append((dt.strftime(DATETIME_FORMAT_READABLE), timestr))
-        return results
+    if return_id:
+        return [f.stem for f in video_files]
     else:
         return video_files
 
