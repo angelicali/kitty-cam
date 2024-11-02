@@ -68,7 +68,7 @@ class CameraRecorder():
         self.logger = logger
         self.video_logger = None
         self.last_detection_time = datetime.now()
-        self.max_delta_past30 = deque(maxlen=30)
+        self.max_delta_history = deque(maxlen=50)
 
         self._clear_first_frames()
         _, self.latest_frame  = self.cap.read()
@@ -94,13 +94,13 @@ class CameraRecorder():
             self._process(frame)
 
     def _moving_avg_max_delta(self):
-        return sum(self.max_delta_past30) / 30.0
+        return sum(self.max_delta_history) / len(self.max_delta_history)
 
     def _process(self, frame):
         t = datetime.now()
         results = self.motion_detector.detect(frame)
         self.frame_event.set()
-        self.max_delta_past30.append(results['Raw Delta']['max_change'])
+        self.max_delta_history.append(results['Raw Delta']['max_change'])
         if results['motion_detected']:
             self.last_detection_time = t
             if self.state == RecordingState.NOT_RECORDING:
@@ -111,12 +111,13 @@ class CameraRecorder():
                 self.state = RecordingState.GRACE_PERIOD
                 self._record(frame, results, t)
             elif self.state == RecordingState.GRACE_PERIOD:
-                if self._moving_avg_max_delta() <= 3:
-                    self.logger.info("Stopped recording because moving avg max delta <= 3")
+                if self._moving_avg_max_delta() <= 5:
+                    self.logger.info("Stopped recording because moving avg max delta <= 5")
                     self._stop_recording()
                 elif self._moving_avg_max_delta() >= 20:
-                    self.logger.info("Keep recording because moving avg max delta >= 20")
+                    self.logger.info("Keep recording and refresh last detection time because moving avg max delta >= 20")
                     self._record(frame, results, t)
+                    self.last_detection_time = t
                 elif results['Contour Analysis']['total_contour_area'] >= 200:
                     self.logger.info("Keep recording and refresh last detection time because total contour area >= 200")
                     self._record(frame, results, t) 
