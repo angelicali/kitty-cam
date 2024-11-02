@@ -100,7 +100,7 @@ class CameraRecorder():
         t = datetime.now()
         results = self.motion_detector.detect(frame)
         self.frame_event.set()
-        self.max_delta_past10.append(results['Raw Delta']['max_change'])
+        self.max_delta_past30.append(results['Raw Delta']['max_change'])
         if results['motion_detected']:
             self.last_detection_time = t
             if self.state == RecordingState.NOT_RECORDING:
