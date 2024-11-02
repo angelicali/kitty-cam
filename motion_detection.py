@@ -2,10 +2,6 @@ import cv2
 import numpy as np
 from collections import deque
 
-class MotionAnalysis(Enum):
-    DEFINITELY_MOTION: 1
-    MAYBE_MOTION: 2
-    DEFINITELY_NOT_MOTION: 3
 
 class MotionDetector():
     def __init__(self, initial_frame, blur_size=21, threshold=25, min_area=500):
@@ -61,11 +57,6 @@ class MotionDetector():
             metrics['Motion Regions'].append({'x': x, 'y': y, 'width': w, 'height': h, 'area': contour_area})
         
         return metrics
-
-    @classmethod
-    def analyze(metrics):
-        if metrics['Raw Delta']['percent_changed'] >= 98:
-            return MotionAnalysis.DEFINITELY_NOT_MOTION
 
     def set_blur_size(self, blur_size):
         self.blur_size = blur_size
