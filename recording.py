@@ -8,6 +8,7 @@ from pathlib import Path
 import threading
 import time
 import json
+from collections import deque
 
 import utils
 from motion_detection import MotionDetector
@@ -56,6 +57,7 @@ class RecordingState(Enum):
     RECORDING = 2
     GRACE_PERIOD = 3 # also recording, but will stop after extended waiting 
 
+
 """ Main camera recorder, responsible for monitoring and recording decisions. """
 class CameraRecorder():
     def __init__(self, video_output_dir: Path, logger):
@@ -66,6 +68,7 @@ class CameraRecorder():
         self.logger = logger
         self.video_logger = None
         self.last_detection_time = datetime.now()
+        self.max_delta_past10 = deque(maxlen=10)
 
         self._clear_first_frames()
         _, self.latest_frame  = self.cap.read()
@@ -90,10 +93,17 @@ class CameraRecorder():
             self.latest_frame = frame
             self._process(frame)
 
+    def _moving_avg_max_delta(self):
+        return sum(self.max_delta_past10) / 10.0
+
+    def _analyze_motion(results):
+        
+
     def _process(self, frame):
         t = datetime.now()
         results = self.motion_detector.detect(frame)
         self.frame_event.set()
+        self.max_delta_past10.append(results['Raw Delta']['max_change'])
         if results['motion_detected']:
             self.last_detection_time = t
             if self.state == RecordingState.NOT_RECORDING:
@@ -104,10 +114,17 @@ class CameraRecorder():
                 self.state = RecordingState.GRACE_PERIOD
                 self._record(frame, results, t)
             elif self.state == RecordingState.GRACE_PERIOD:
-                if (t - self.last_detection_time).total_seconds() > 10:
+                if self._moving_avg_max_delta() <= 3:
                     self._stop_recording()
-                else:
+                elif self._moving_avg_max_delta() >= 20:
                     self._record(frame, results, t)
+                elif results['Contour Analysis']['total_contour_area'] >= 200:
+                    self._record(frame, results, t) 
+                    self.last_detection_time = t
+                elif (t - self.last_detection_time).total_seconds() <= 10:
+                    self._record(frame, results, t)
+                else:
+                    self._stop_recording()
             else: # No motion detected and is not recording
                 time.sleep(0.2)
 
@@ -122,7 +139,8 @@ class CameraRecorder():
         self.video_writer.write(frame)
         log_entry = {
             'timestamp': t.strftime(utils.DATETIME_FORMAT_READABLE_SECOND),
-            'motion_detection_results': motion_detection_results
+            'motion_detection_results': motion_detection_results,
+            'moving_avg_max_delta': self._moving_avg_max_delta()
         }
         self.video_logger.log(log_entry)
 

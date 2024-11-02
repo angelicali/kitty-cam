@@ -1,12 +1,19 @@
 import cv2
 import numpy as np
+from collections import deque
+
+class MotionAnalysis(Enum):
+    DEFINITELY_MOTION: 1
+    MAYBE_MOTION: 2
+    DEFINITELY_NOT_MOTION: 3
 
 class MotionDetector():
-    def __init__(self, initial_frame, blur_size=21, threshold=30, min_area=500):
+    def __init__(self, initial_frame, blur_size=21, threshold=25, min_area=500):
         self.blur_size = blur_size
         self.threshold = threshold
         self.min_area = min_area
         self.prev_frame_blurred = self._blur(initial_frame)
+        self.avg_delta_past30 = deque(maxlen=30)
 
     def _blur(self, frame):
         frame = frame.copy()
@@ -23,39 +30,42 @@ class MotionDetector():
         dilated_delta = cv2.dilate(threshold_delta, None, iterations=2)
         contours, _ = cv2.findContours(dilated_delta.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        metics = {
+        metrics = {
             'Raw Delta': {
                 'mean_change': np.mean(raw_delta),
-                'max_change': np.max(raw_delta),
+                'max_change': float(np.max(raw_delta)),
                 'percent_changed': (raw_delta > self.threshold).mean() * 100
             },
             'Threshold Delta': {
                 'mean_change': np.mean(threshold_delta),
-                'max_change': np.max(threshold_delta),
                 'percent_changed': (threshold_delta > 0).mean() * 100
             },
             'Dilated Delta': {
                 'mean_change': np.mean(dilated_delta),
-                'max_change': np.max(dilated_delta),
                 'percent_changed': (dilated_delta > 0).mean() * 100
             },
             'Contour Analysis': {
                 'total_contour_area': sum(cv2.contourArea(c) for c in contours),
                 'contour_count': len(contours)
             }
-        },
+        }
 
-        metics["motion_detected"] = False
-        metics['Motion Regions'] = []
+        metrics["motion_detected"] = False
+        metrics['Motion Regions'] = []
 
         for contour in contours:
             contour_area = cv2.contourArea(contour)
             if contour_area > self.min_area:
-                metics["motion_detected"] = True
+                metrics["motion_detected"] = True
             (x, y, w, h) = cv2.boundingRect(contour)
-            metics['Motion Regions'].append({'x': x, 'y': y, 'width': w, 'height': h, 'area': contour_area})
+            metrics['Motion Regions'].append({'x': x, 'y': y, 'width': w, 'height': h, 'area': contour_area})
         
-        return metics
+        return metrics
+
+    @classmethod
+    def analyze(metrics):
+        if metrics['Raw Delta']['percent_changed'] >= 98:
+            return MotionAnalysis.DEFINITELY_NOT_MOTION
 
     def set_blur_size(self, blur_size):
         self.blur_size = blur_size
