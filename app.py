@@ -1,13 +1,15 @@
 import atexit
 import cv2
 from datetime import datetime
-from flask import Flask, Response, request, make_response, send_from_directory
+from flask import Flask, Response, request, make_response, send_from_directory, stream_with_context
 from flask_cors import CORS
 import logging 
 import os
 import threading
 from recording import CameraRecorder
 import utils
+import base64
+import json
 
 HOME_IP = os.getenv("HOME_IP")
 
@@ -38,9 +40,28 @@ def _get_livestream():
                b'Content-Type: image.jpeg\r\n\r\n'
                + buf.tobytes() + b'\r\n')
 
+
+def _get_livestreamr():
+    while True:
+        recorder.frame_event.wait()
+        recorder.frame_event.clear()
+
+        _, buf = cv2.imencode('.jpg', recorder.latest_frame)
+        frame_base64 = base64.b64encode(buf).decode('utf-8')
+        data = json.dumps({
+            "frame": frame_base64,
+            "is_recording": recorder.is_recording()
+        })
+        
+        yield f"data: {data}\n\n"
+
 @app.route('/livestream')
 def livestream():
     return Response(_get_livestream(), mimetype='multipart/x-mixed-replace;boundary=frame')
+
+@app.route('/livestreamr')
+def livestreamr():
+    return Response(stream_with_context(_get_livestreamr()), mimetype='text/event-stream')
 
 @app.route('/past-visits')
 def past_visists():
