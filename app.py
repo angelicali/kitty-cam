@@ -78,7 +78,7 @@ def is_user_admin(request):
 def video_request(video_id):
     if request.method == 'GET':
         response = make_response(send_from_directory(str(utils.VIDEO_DIR), f"{video_id}.mp4"))
-        response.headers['Cache-Control'] = 'public, max-age=604800, immutable'
+        response.headers['Cache-Control'] = 'public, max-age=604800, must-revalidate'
         return response
     elif request.method == 'DELETE':
         if not is_user_admin(request):

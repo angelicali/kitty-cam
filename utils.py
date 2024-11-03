@@ -116,8 +116,8 @@ def merge(video_ids):
     new_video_id = video_ids[0]
     
     # Merge videos
-    filelist_name = f'tmp/merge_filelist_{new_video_id}.txt'
-    new_video_filename = VIDEO_DIR / ({new_video_id} + '_new.mp4')
+    filelist_name = f'merge_filelist_{new_video_id}.txt'
+    new_video_filename = VIDEO_DIR / f"{new_video_id}_new.mp4"
     with open(filelist_name, 'w') as f:
         for video in video_ids:
             f.write(f"file 'static/{video}.mp4'\n")
@@ -127,7 +127,7 @@ def merge(video_ids):
     new_log_file = VIDEO_LOG_DIR / (new_video_id + '_new.jsonl')
     with new_log_file.open('w') as wf:
         for vid in video_ids:
-            file = VIDEO_DIR / (vid + '.mp4')
+            file = VIDEO_LOG_DIR / (vid + '.jsonl')
             with file.open('r') as rf:
                 wf.write(rf.read())
 

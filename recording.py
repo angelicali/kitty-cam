@@ -114,8 +114,8 @@ class CameraRecorder():
                 if self._moving_avg_max_delta() <= 5:
                     self.logger.info("Stopped recording because moving avg max delta <= 5")
                     self._stop_recording()
-                elif self._moving_avg_max_delta() >= 20:
-                    self.logger.info("Keep recording and refresh last detection time because moving avg max delta >= 20")
+                elif self._moving_avg_max_delta() >= 14:
+                    self.logger.info("Keep recording and refresh last detection time because moving avg max delta >= 14")
                     self._record(frame, results, t)
                     self.last_detection_time = t
                 elif results['Contour Analysis']['total_contour_area'] >= 200:
