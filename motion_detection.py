@@ -32,14 +32,14 @@ class MotionDetector():
                 'max_change': float(np.max(raw_delta)),
                 'percent_changed': (raw_delta > self.threshold).mean() * 100
             },
-            'Threshold Delta': {
-                'mean_change': np.mean(threshold_delta),
-                'percent_changed': (threshold_delta > 0).mean() * 100
-            },
-            'Dilated Delta': {
-                'mean_change': np.mean(dilated_delta),
-                'percent_changed': (dilated_delta > 0).mean() * 100
-            },
+            # 'Threshold Delta': {
+            #    'mean_change': np.mean(threshold_delta),
+            #    'percent_changed': (threshold_delta > 0).mean() * 100
+            # },
+            # 'Dilated Delta': {
+            #   'mean_change': np.mean(dilated_delta),
+            #    'percent_changed': (dilated_delta > 0).mean() * 100
+            #},
             'Contour Analysis': {
                 'total_contour_area': sum(cv2.contourArea(c) for c in contours),
                 'contour_count': len(contours)
