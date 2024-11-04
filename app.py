@@ -86,6 +86,13 @@ def video_request(video_id):
         utils.delete_video_by_id(video_id)
         return f"deleted {video_id}"
 
+@app.route('/merge', methods=['POST'])
+def merge_videos():
+    if not is_user_admin(requests):
+        return {"error": f"Unauthorized"}, 403
+    utils.merge(request.form.getlist('video_to_merge'))
+    return f"merged videos"
+
 @app.route('/video-log/<path:video_id>')
 def video_log(video_id):
     return utils.get_video_log(video_id)
