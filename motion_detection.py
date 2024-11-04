@@ -46,15 +46,15 @@ class MotionDetector():
             }
         }
 
-        metrics["motion_detected"] = False
-        metrics['Motion Regions'] = []
+        # metrics["motion_detected"] = False
+        # metrics['Motion Regions'] = []
 
-        for contour in contours:
-            contour_area = cv2.contourArea(contour)
-            if contour_area > self.min_area:
-                metrics["motion_detected"] = True
-            (x, y, w, h) = cv2.boundingRect(contour)
-            metrics['Motion Regions'].append({'x': x, 'y': y, 'width': w, 'height': h, 'area': contour_area})
+        # for contour in contours:
+        #     contour_area = cv2.contourArea(contour)
+        #     if contour_area > self.min_area:
+        #         metrics["motion_detected"] = True
+            # (x, y, w, h) = cv2.boundingRect(contour)
+            # metrics['Motion Regions'].append({'x': x, 'y': y, 'width': w, 'height': h, 'area': contour_area})
         
         return metrics
 

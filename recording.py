@@ -131,7 +131,7 @@ class CameraRecorder():
                     self.state = RecordingState.RECORDING
                     self._record(frame, results, t)
                     self.last_detection_time = t
-                elif self._moving_avg_max_delta() < 3 or (t - self.last_detection_time).total_seconds() > 10:
+                elif self._moving_avg_max_delta() < 3 or self._moving_avg_contour_area() < 5 or (t - self.last_detection_time).total_seconds() > 10:
                     self._stop_recording()
                 else:
                     self._record(frame, results, t)
@@ -150,7 +150,7 @@ class CameraRecorder():
             'motion_detection_results': motion_detection_results,
             'moving_avg_max_delta': self._moving_avg_max_delta(),
             'moving_avg_contour_area': self._moving_avg_contour_area(),
-            'recording_state': self.state.value
+            'recording_state': self.state.name
         }
         self.video_logger.log(log_entry)
 
