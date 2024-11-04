@@ -69,6 +69,8 @@ class CameraRecorder():
         self.video_logger = None
         self.last_detection_time = datetime.now()
         self.max_delta_history = deque(maxlen=50)
+        self.contour_area_history = deque(maxlen=50)
+        self.contour_area_history.extend([0]*50)
 
         self._clear_first_frames()
         _, self.latest_frame  = self.cap.read()
@@ -96,39 +98,43 @@ class CameraRecorder():
     def _moving_avg_max_delta(self):
         return sum(self.max_delta_history) / len(self.max_delta_history)
 
+    def _moving_avg_contour_area(self, last_n=None):
+        if last_n is None:
+            return sum(self.contour_area_history) / len(self.contour_area_history)
+        return sum([self.contour_area_history[-i] for i in range(1, last_n+1)]) / last_n
+
+
     def _process(self, frame):
         t = datetime.now()
         results = self.motion_detector.detect(frame)
         self.frame_event.set()
+        contour_area = results['Contour Analysis']['total_contour_area']
         self.max_delta_history.append(results['Raw Delta']['max_change'])
-        if results['motion_detected']:
-            self.last_detection_time = t
-            if self.state == RecordingState.NOT_RECORDING:
-                self._prepare_recording(t.strftime(utils.DATETIME_FORMAT))
-            self._record(frame, results, t)
-        else:
-            if self.state == RecordingState.RECORDING:
-                self.state = RecordingState.GRACE_PERIOD
-                self._record(frame, results, t)
-            elif self.state == RecordingState.GRACE_PERIOD:
-                if self._moving_avg_max_delta() <= 5:
-                    self.logger.info("Stopped recording because moving avg max delta <= 5")
-                    self._stop_recording()
-                elif self._moving_avg_max_delta() >= 14:
-                    self.logger.info("Keep recording and refresh last detection time because moving avg max delta >= 14")
+        self.contour_area_history.append(contour_area)
+
+        match self.state:
+            case RecordingState.NOT_RECORDING:
+                if contour_area >= 700:
+                    self._prepare_recording(t.strftime(utils.DATETIME_FORMAT))
                     self._record(frame, results, t)
                     self.last_detection_time = t
-                elif results['Contour Analysis']['total_contour_area'] >= 200:
-                    self.logger.info("Keep recording and refresh last detection time because total contour area >= 200")
-                    self._record(frame, results, t) 
-                    self.last_detection_time = t
-                elif (t - self.last_detection_time).total_seconds() <= 10:
-                    self._record(frame, results, t)
                 else:
-                    self.logger.info("Stopped recording because grace period of 10 seconds has timed out")
+                    time.sleep(0.2)
+            case RecordingState.RECORDING:
+                if self._moving_avg_contour_area() < 300:
+                    self.state = RecordingState.GRACE_PERIOD
+                self._record(frame, results, t)
+                self.last_detection_time = t
+                return
+            case RecordingState.GRACE_PERIOD:
+                if self._moving_avg_contour_area() >= 300:
+                    self.state = RecordingState.RECORDING
+                    self._record(frame, results, t)
+                    self.last_detection_time = t
+                elif self._moving_avg_max_delta() < 3 or (t - self.last_detection_time).total_seconds() > 10:
                     self._stop_recording()
-            else: # No motion detected and is not recording
-                time.sleep(0.2)
+                else:
+                    self._record(frame, results, t)
 
 
     def _prepare_recording(self, video_id):
@@ -142,7 +148,9 @@ class CameraRecorder():
         log_entry = {
             'timestamp': t.strftime(utils.DATETIME_FORMAT_READABLE_SECOND),
             'motion_detection_results': motion_detection_results,
-            'moving_avg_max_delta': self._moving_avg_max_delta()
+            'moving_avg_max_delta': self._moving_avg_max_delta(),
+            'moving_avg_contour_area': self._moving_avg_contour_area(),
+            'recording_state': self.state.value
         }
         self.video_logger.log(log_entry)
 
