@@ -138,3 +138,5 @@ def merge(video_ids):
     # Move new video and log to proper paths
     new_video_filename.rename(get_video_path(new_video_id))
     new_log_file.rename(get_video_log_path(new_video_id))
+
+    Path(filelist_name).unlink()

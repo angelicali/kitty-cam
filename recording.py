@@ -114,24 +114,24 @@ class CameraRecorder():
 
         match self.state:
             case RecordingState.NOT_RECORDING:
-                if contour_area >= 700:
+                if contour_area >= 1000:
                     self._prepare_recording(t.strftime(utils.DATETIME_FORMAT))
                     self._record(frame, results, t)
                     self.last_detection_time = t
                 else:
                     time.sleep(0.2)
             case RecordingState.RECORDING:
-                if self._moving_avg_contour_area() < 300:
+                if contour_area < 300 and self._moving_avg_contour_area() < 200:
                     self.state = RecordingState.GRACE_PERIOD
                 self._record(frame, results, t)
                 self.last_detection_time = t
                 return
             case RecordingState.GRACE_PERIOD:
-                if self._moving_avg_contour_area() >= 300:
+                if contour_area > 400 or self._moving_avg_contour_area() >= 200:
                     self.state = RecordingState.RECORDING
                     self._record(frame, results, t)
                     self.last_detection_time = t
-                elif self._moving_avg_max_delta() < 3 or self._moving_avg_contour_area() < 5 or (t - self.last_detection_time).total_seconds() > 10:
+                elif self._moving_avg_max_delta() < 3 or (t - self.last_detection_time).total_seconds() > 10:
                     self._stop_recording()
                 else:
                     self._record(frame, results, t)
