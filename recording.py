@@ -12,6 +12,8 @@ from collections import deque
 
 import utils
 from motion_detection import MotionDetector
+from object_detection import ObjectDetector
+
 
 class VideoWriter():
     """ For writing a single video. """
@@ -74,9 +76,11 @@ class CameraRecorder():
 
         self._clear_first_frames()
         _, self.latest_frame  = self.cap.read()
+        self.object_detector = ObjectDetector()
         self.motion_detector = MotionDetector(self.latest_frame)
         self.frame_event = threading.Event()
         self.frame_event.set()
+        
 
     def get_latest_frame(self):
         return self.latest_frame
@@ -112,26 +116,30 @@ class CameraRecorder():
         self.max_delta_history.append(results['Raw Delta']['max_change'])
         self.contour_area_history.append(contour_area)
 
+        
         match self.state:
             case RecordingState.NOT_RECORDING:
                 if contour_area >= 1000:
+                    objects = self.object_detector.detect(frame)
+                    if len(objects)==0:
+                        return
                     self._prepare_recording(t.strftime(utils.DATETIME_FORMAT))
-                    self._record(frame, results, t)
+                    self._record(frame, results, t, objects)
                     self.last_detection_time = t
                 else:
                     time.sleep(0.2)
             case RecordingState.RECORDING:
-                if contour_area < 300 and self._moving_avg_contour_area() < 200:
+                if contour_area < 100 and self._moving_avg_contour_area() < 100:
                     self.state = RecordingState.GRACE_PERIOD
                 self._record(frame, results, t)
                 self.last_detection_time = t
                 return
             case RecordingState.GRACE_PERIOD:
-                if contour_area > 400 or self._moving_avg_contour_area() >= 200:
+                if contour_area > 100 or self._moving_avg_contour_area() >= 100:
                     self.state = RecordingState.RECORDING
                     self._record(frame, results, t)
                     self.last_detection_time = t
-                elif self._moving_avg_max_delta() < 3 or (t - self.last_detection_time).total_seconds() > 10:
+                elif (t - self.last_detection_time).total_seconds() > 10:
                     self._stop_recording()
                 else:
                     self._record(frame, results, t)
@@ -143,7 +151,7 @@ class CameraRecorder():
         self.video_writer = VideoWriter(str(self.video_dir / (video_id + '.mp4')))
         self.logger.info(f"Recording started for {video_id}")
 
-    def _record(self, frame, motion_detection_results, t):
+    def _record(self, frame, motion_detection_results, t, object_detection_results=None):
         self.video_writer.write(frame)
         log_entry = {
             'timestamp': t.strftime(utils.DATETIME_FORMAT_READABLE_SECOND),
@@ -152,6 +160,8 @@ class CameraRecorder():
             'moving_avg_contour_area': self._moving_avg_contour_area(),
             'recording_state': self.state.name
         }
+        if object_detection_results is not None:
+            log_entry['object_detection_results'] = object_detection_results
         self.video_logger.log(log_entry)
 
     def _stop_recording(self):
