@@ -5,8 +5,11 @@ class ObjectDetector():
     def __init__(self):
         self.model = YOLO("finetuned_ncnn_model")
     
-    def detect(self, frame, threshold=0.1):
-        results = self.model(frame)[0]
+    def detect(self, frame, track=True, persist=True, threshold=0.1):
+        if track:
+            results = self.model.track(frame, persist=persist)[0]
+        else:
+            results = self.model(frame)[0]
         objects = json.loads(results.to_json())
         return [obj for obj in objects if obj['confidence'] >= threshold]
 

@@ -115,12 +115,11 @@ class CameraRecorder():
         contour_area = results['Contour Analysis']['total_contour_area']
         self.max_delta_history.append(results['Raw Delta']['max_change'])
         self.contour_area_history.append(contour_area)
-
         
         match self.state:
             case RecordingState.NOT_RECORDING:
-                if contour_area >= 1000:
-                    objects = self.object_detector.detect(frame)
+                if contour_area >= 500:
+                    objects = self.object_detector.detect(frame, persist=False)
                     if len(objects)==0:
                         return
                     self._prepare_recording(t.strftime(utils.DATETIME_FORMAT))
@@ -129,17 +128,19 @@ class CameraRecorder():
                 else:
                     time.sleep(0.2)
             case RecordingState.RECORDING:
-                if contour_area < 100 and self._moving_avg_contour_area() < 100:
+                objects = self.object_detector.detect(frame, persist=True, threshold=0.0)
+                if len(objects) == 0 and contour_area < 100 and self._moving_avg_contour_area() < 100:
                     self.state = RecordingState.GRACE_PERIOD
-                self._record(frame, results, t)
+                self._record(frame, results, t, objects)
                 self.last_detection_time = t
                 return
             case RecordingState.GRACE_PERIOD:
-                if contour_area > 100 or self._moving_avg_contour_area() >= 100:
+                objects = self.object_detector.detect(frame, persist=True, threshold=0.0)
+                if len(objects)>0 or contour_area > 100 or self._moving_avg_contour_area() >= 100:
                     self.state = RecordingState.RECORDING
-                    self._record(frame, results, t)
+                    self._record(frame, results, t, objects)
                     self.last_detection_time = t
-                elif (t - self.last_detection_time).total_seconds() > 10:
+                elif (t - self.last_detection_time).total_seconds() > 8:
                     self._stop_recording()
                 else:
                     self._record(frame, results, t)
