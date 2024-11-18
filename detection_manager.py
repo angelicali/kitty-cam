@@ -1,4 +1,3 @@
-""" Recording logic and utils for the camera. """
 import cv2
 from enum import Enum
 from datetime import datetime
@@ -16,7 +15,7 @@ from motion_detection import MotionDetector
 from object_detection import ObjectDetector
 from video_utils import VideoLoggerHandler
 
-class DetectionMananger():
+class DetectionManager():
     def __init__(self, camera_feed):
         self.video_logger_handler = VideoLoggerHandler()
 

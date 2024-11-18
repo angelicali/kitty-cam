@@ -18,9 +18,10 @@ class CameraFeed():
 
 
     def _clear_first_frames(self):
-        for _ in range(10):
-            self.current_frame = self.cap.read()
-            time.sleep(0.5)
+        for _ in range(3):
+            ret, self.latest_frame = self.cap.read()
+            print(f"clearing frame; cap returned {ret} {self.latest_frame.shape if self.latest_frame is not None else None}")    
+            time.sleep(0.05)
     
     def start(self):
         self.is_running = True

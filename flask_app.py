@@ -19,8 +19,7 @@ CORS(app) # TODO: is this correct?
 
 ### API routes  
 def _get_livestream():
-    while True:
-        frame = app.camera_feed.stream_frame()
+    for frame in app.camera_feed.stream_frame():
 
         _, buf = cv2.imencode('.jpg', frame)
         yield (b'--frame\r\n'
@@ -29,13 +28,12 @@ def _get_livestream():
 
 
 def _get_livestreamr():
-    while True:
-        frame = app.camera_feed.stream_frame()
+    for frame in app.camera_feed.stream_frame():
         _, buf = cv2.imencode('.jpg', frame)
         frame_base64 = base64.b64encode(buf).decode('utf-8')
         data = json.dumps({
             "frame": frame_base64,
-            "is_recording": app.camera_feed.is_recording()
+            "is_recording": app.camera_feed.is_recording
         })
         
         yield f"data: {data}\n\n"

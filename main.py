@@ -1,6 +1,6 @@
 from flask_app import app as flask_app
 import atexit
-import datetime
+from datetime import datetime
 import logging
 
 from camera_feed import CameraFeed

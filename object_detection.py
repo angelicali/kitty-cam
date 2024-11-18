@@ -9,7 +9,7 @@ class ObjectDetector():
         self.model = YOLO("finetuned_ncnn_model")
         self.camera_feed = camera_feed
         self.is_running = True
-        self.results_queue = deque(maxlan=30)
+        self.results_queue = deque(maxlen=30)
         self.last_detection_time = 0
         self.video_logger_handler = video_logger_handler
         self.is_logging = False
@@ -30,7 +30,11 @@ class ObjectDetector():
             if len(results) > 0:
                 self.last_detection_time = ts
                 if self.is_logging:
-                    self.video_logger_handler((ts, results))
+                    self.video_logger_handler.log((ts, results))
+            if not self.camera_feed.is_recording:
+                time.sleep(2)
+            else:
+                time.sleep(1)
 
     def set_is_logging(self, is_logging):
         self.is_logging = is_logging
