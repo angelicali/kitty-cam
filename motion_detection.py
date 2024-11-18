@@ -1,15 +1,46 @@
 import cv2
 import numpy as np
 from collections import deque
-
+import threading
+import time
 
 class MotionDetector():
-    def __init__(self, initial_frame, blur_size=21, threshold=25, min_area=500):
+    def __init__(self, camera_feed, blur_size=21, threshold=25, min_area=500):
         self.blur_size = blur_size
         self.threshold = threshold
         self.min_area = min_area
-        self.prev_frame_blurred = self._blur(initial_frame)
-        self.avg_delta_past30 = deque(maxlen=30)
+        
+        self.camera_feed = camera_feed
+        self.video_logger = None
+        self.is_running = False
+
+        self.prev_frame_blurred = self._blur(self.camera_feed.get_frame())
+        self.last_major_motion_detection_time = 0
+        self.last_motion_detection_time = 0
+        self.results_queue = deque(maxlan=30)
+
+    def start(self):
+        self.is_running = True
+        self.thread = threading.Process(target=self._loop_detection)
+        self.thread.daemon = True
+        self.thread.start()
+
+    def _loop_detection(self):
+        while self.is_running:
+            ts = time.time_ns()
+            results = self.detect(self.camera_feed.get_frame())
+            self.results_queue.append((ts, results))
+            if results['contour_area_max'] >= 500:
+                self.last_major_motion_detection_time = ts
+                self.last_motion_detection_time = ts
+            elif results['contour_area_max'] >= 100:
+                self.last_motion_detection_time = ts
+            if self.is_logging:
+                self.video_logger_handler((ts, results))
+            time.sleep(1)
+
+    def set_is_logging(self, is_logging):
+        self.is_logging = is_logging
 
     def _blur(self, frame):
         frame = frame.copy()
@@ -27,35 +58,14 @@ class MotionDetector():
         contours, _ = cv2.findContours(dilated_delta.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         metrics = {
-            'Raw Delta': {
-                'mean_change': np.mean(raw_delta),
-                'max_change': float(np.max(raw_delta)),
-                'percent_changed': (raw_delta > self.threshold).mean() * 100
-            },
-            # 'Threshold Delta': {
-            #    'mean_change': np.mean(threshold_delta),
-            #    'percent_changed': (threshold_delta > 0).mean() * 100
-            # },
-            # 'Dilated Delta': {
-            #   'mean_change': np.mean(dilated_delta),
-            #    'percent_changed': (dilated_delta > 0).mean() * 100
-            #},
-            'Contour Analysis': {
-                'total_contour_area': sum(cv2.contourArea(c) for c in contours),
-                'contour_count': len(contours)
-            }
+            'raw_delta_mean_change': np.mean(raw_delta),
+            'raw_delta_max_change': float(np.max(raw_delta)),
+            'raw_delta_percent_change': (raw_delta > self.threshold).mean() * 100,
+            'contour_area_total': sum(cv2.contourArea(c) for c in contours),
+            'contour_count': len(contours),
+            'contour_area_max': np.max(cv2.contourArea(c) for c in contours)
         }
 
-        # metrics["motion_detected"] = False
-        # metrics['Motion Regions'] = []
-
-        # for contour in contours:
-        #     contour_area = cv2.contourArea(contour)
-        #     if contour_area > self.min_area:
-        #         metrics["motion_detected"] = True
-            # (x, y, w, h) = cv2.boundingRect(contour)
-            # metrics['Motion Regions'].append({'x': x, 'y': y, 'width': w, 'height': h, 'area': contour_area})
-        
         return metrics
 
     def set_blur_size(self, blur_size):
@@ -69,4 +79,3 @@ class MotionDetector():
     
     def get_configs(self):
         return {"blur_size": self.blur_size, "threshold": self.threshold, "min_area": self.min_area}
-    

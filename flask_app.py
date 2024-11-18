@@ -1,4 +1,3 @@
-import atexit
 import cv2
 from datetime import datetime
 from flask import Flask, Response, request, make_response, send_from_directory, stream_with_context
@@ -6,7 +5,6 @@ from flask_cors import CORS
 import logging 
 import os
 import threading
-from recording import CameraRecorder
 import utils
 import base64
 import json
@@ -19,23 +17,12 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800
 CORS(app) # TODO: is this correct?
 
 
-# Logging
-today = str(datetime.now().date())
-logger = logging.getLogger(__name__)
-log_filename = f"logs/{today}.log"
-logging.basicConfig(filename=log_filename, level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-
-
-recorder = CameraRecorder(utils.VIDEO_DIR, logger)
-atexit.register(recorder.cleanup)
-
 ### API routes  
 def _get_livestream():
     while True:
-        recorder.frame_event.wait()
-        recorder.frame_event.clear()
+        frame = app.camera_feed.stream_frame()
 
-        _, buf = cv2.imencode('.jpg', recorder.latest_frame)
+        _, buf = cv2.imencode('.jpg', frame)
         yield (b'--frame\r\n'
                b'Content-Type: image.jpeg\r\n\r\n'
                + buf.tobytes() + b'\r\n')
@@ -43,14 +30,12 @@ def _get_livestream():
 
 def _get_livestreamr():
     while True:
-        recorder.frame_event.wait()
-        recorder.frame_event.clear()
-
-        _, buf = cv2.imencode('.jpg', recorder.latest_frame)
+        frame = app.camera_feed.stream_frame()
+        _, buf = cv2.imencode('.jpg', frame)
         frame_base64 = base64.b64encode(buf).decode('utf-8')
         data = json.dumps({
             "frame": frame_base64,
-            "is_recording": recorder.is_recording()
+            "is_recording": app.camera_feed.is_recording()
         })
         
         yield f"data: {data}\n\n"
@@ -65,13 +50,13 @@ def livestreamr():
 
 @app.route('/past-visits')
 def past_visists():
-    return utils.get_video_list(skip_latest=recorder.is_recording(), max_videos=50, return_id=True)
+    return utils.get_video_list(skip_latest=app.camera_feed.is_recording, max_videos=50, return_id=True)
 
 def is_user_admin(request):
     user_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     authorized = user_ip.startswith('192.168.') or user_ip == HOME_IP
     if not authorized:
-        logger.debug(f"unauthorized ip: {user_ip}")
+        app.logger.debug(f"unauthorized ip: {user_ip}")
     return authorized
 
 @app.route('/video/<path:video_id>', methods=['GET', 'DELETE'])
@@ -88,7 +73,7 @@ def video_request(video_id):
 
 @app.route('/merge', methods=['POST'])
 def merge_videos():
-    if not is_user_admin(requests):
+    if not is_user_admin(request):
         return {"error": f"Unauthorized"}, 403
     utils.merge(request.form.getlist('video_to_merge'))
     return f"merged videos"
@@ -112,9 +97,3 @@ def logs():
         log_content = f.read()
     return Response(log_content, mimetype='text/plain')
 
-if __name__ == '__main__':
-    camera_thread = threading.Thread(target=recorder.run)
-    camera_thread.daemon = True
-    camera_thread.start()
-    
-    app.run(host='0.0.0.0', port=5000)
