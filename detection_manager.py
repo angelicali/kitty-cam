@@ -36,7 +36,7 @@ class DetectionManager():
                     self.video_logger_handler.log(objd_results)
                 if ts-last_object_detected_ts > 10 and ts-last_motion_detected_ts > 5:
                     self.camera_feed.stop_recording()
-                time.sleep(1)
+                time.sleep(3)
             else:
                 if ts-last_object_detected_ts < 10 and ts-last_major_motion_detected_ts < 5:
                     self._start_recording()

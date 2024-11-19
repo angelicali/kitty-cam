@@ -34,7 +34,7 @@ class ObjectDetector():
             if len(objects) > 0:
                 last_detection_time.value = ts
             if not is_recording.value:
-                time.sleep(2)
+                time.sleep(3)
             else:
                 time.sleep(1)
                 detection_results_queue.put((ts,objects))
