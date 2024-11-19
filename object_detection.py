@@ -5,50 +5,36 @@ from collections import deque
 import time
 
 class ObjectDetector():
-    def __init__(self, camera_feed, video_logger_handler):
-        self.model = YOLO("finetuned_ncnn_model")
+    def __init__(self, camera_feed):
         self.camera_feed = camera_feed
-        self.is_running = True
-        self.results_queue = deque(maxlen=30)
-        self.last_detection_time = 0
-        self.video_logger_handler = video_logger_handler
-        self.is_logging = False
+        self.is_running = multiprocessing.Value('i', 1)
+        self.results_queue = multiprocessing.Queue()
+        self.last_detection_time = multiprocessing.Value('i', 0)
     
     def start(self):
-        self.process = multiprocessing.Process(target=self._loop_detection)
+        self.process = multiprocessing.Process(target=self._loop_detection, args=(self.camera_feed.frame_queue, self.camera_feed.is_recording, self.last_detection_time, self.is_running, self.results_queue))
         self.process.daemon = True
         self.process.start()
 
     def cleanup(self):
+        print("stopping object detector...")
+        self.is_running.value = 0
         self.process.join()
+        print("object detector process joined")
 
-    def _loop_detection(self):
-        while self.is_running:
-            ts = time.time_ns()
-            results = self.detect(self.camera_feed.get_frame(), threshold=0.0)
-            self.results_queue.append((ts,results))
-            if len(results) > 0:
-                self.last_detection_time = ts
-                if self.is_logging:
-                    self.video_logger_handler.log((ts, results))
-            if not self.camera_feed.is_recording:
+    def _loop_detection(self, frame_queue, is_recording, last_detection_time, is_running, detection_results_queue):
+        model = YOLO("finetuned_ncnn_model")
+        while is_running.value == 1:
+            frame = frame_queue.get()
+            if frame is None:
+                break
+            ts = int(time.time())
+            results = model.track(frame, persist=True)[0]
+            objects = json.loads(results.to_json())
+            if len(objects) > 0:
+                last_detection_time.value = ts
+            if not is_recording.value:
                 time.sleep(2)
             else:
                 time.sleep(1)
-
-    def set_is_logging(self, is_logging):
-        self.is_logging = is_logging
-
-    def detect(self, frame, track=True, persist=True, threshold=0.1):
-        if track:
-            results = self.model.track(frame, persist=persist)[0]
-        else:
-            results = self.model(frame)[0]
-        objects = json.loads(results.to_json())
-        return [obj for obj in objects if obj['confidence'] >= threshold]
-
-    def detect_anything(self, frame, threshold=0.1):
-        detections = self.detect(frame, threshold)
-        return len(detections)>0
-
-        
+                detection_results_queue.put((ts,objects))

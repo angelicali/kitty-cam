@@ -16,7 +16,6 @@ app = Flask("kitty-cam", static_folder="static")
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800
 CORS(app) # TODO: is this correct?
 
-
 ### API routes  
 def _get_livestream():
     for frame in app.camera_feed.stream_frame():
@@ -33,7 +32,7 @@ def _get_livestreamr():
         frame_base64 = base64.b64encode(buf).decode('utf-8')
         data = json.dumps({
             "frame": frame_base64,
-            "is_recording": app.camera_feed.is_recording
+            "is_recording": app.camera_feed.get_is_recording()
         })
         
         yield f"data: {data}\n\n"

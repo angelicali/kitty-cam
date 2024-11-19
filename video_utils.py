@@ -8,7 +8,7 @@ import utils
 class VideoWriter():
     """ For writing a single video. """
     def __init__(self, video_id):
-        output_path = str(self.video_dir / (video_id + '.mp4'))
+        output_path = str(utils.VIDEO_DIR / (video_id + '.mp4'))
 
         self.process = (
                 ffmpeg
@@ -36,7 +36,7 @@ class VideoWriter():
 
 class VideoLogger():
     def __init__(self, video_id):
-        self.logger = logging.getLogger(f"detection_logger_{video_id}")
+        self.logger = logging.getLogger(f"detection_logger")
         self.logger.setLevel(logging.INFO)
         
         self.file_handler = logging.FileHandler(utils.VIDEO_LOG_DIR / f"{video_id}.jsonl", mode='a')
@@ -44,10 +44,11 @@ class VideoLogger():
     
     def log(self, data):
         self.logger.info(json.dumps(data))
-    
+
     def close(self):
         self.logger.removeHandler(self.file_handler)
-        self.file_handler.close()
+        if self.file_handler is not None:
+            self.file_handler.close()
 
 class VideoLoggerHandler():
     def __init__(self):

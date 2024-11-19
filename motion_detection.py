@@ -13,7 +13,6 @@ class MotionDetector():
         self.camera_feed = camera_feed
         self.video_logger_handler = video_logger_handler
         self.is_running = False
-        self.is_logging = False
 
         self.prev_frame_blurred = None
         self.last_major_motion_detection_time = 0
@@ -27,9 +26,15 @@ class MotionDetector():
         self.thread.daemon = True
         self.thread.start()
 
+    def cleanup(self):
+        print("stopping motion detector...")
+        self.is_running = False
+        self.thread.join()
+        print("motion detector thread joined")
+
     def _loop_detection(self):
         while self.is_running:
-            ts = time.time_ns()
+            ts = int(time.time())
             results = self.detect(self.camera_feed.get_frame())
             self.results_queue.append((ts, results))
             if results['contour_area_max'] >= 500:
@@ -37,12 +42,10 @@ class MotionDetector():
                 self.last_motion_detection_time = ts
             elif results['contour_area_max'] >= 100:
                 self.last_motion_detection_time = ts
-            if self.is_logging:
+            if self.camera_feed.get_is_recording():
                 self.video_logger_handler.log((ts, results))
             time.sleep(1)
 
-    def set_is_logging(self, is_logging):
-        self.is_logging = is_logging
 
     def _blur(self, frame):
         frame = frame.copy()

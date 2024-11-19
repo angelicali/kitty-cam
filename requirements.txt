@@ -1,0 +1,5 @@
+Flask
+Flask-cors
+opencv-python
+ffmpeg-python
+ultralytics
