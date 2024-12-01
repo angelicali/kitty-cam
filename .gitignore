@@ -7,3 +7,4 @@ static/
 trash-bin/
 yolov*
 venv/
+data/

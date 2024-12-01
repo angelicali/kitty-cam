@@ -14,6 +14,7 @@ ANALYTICS_DIR = Path('analytics/')
 ANALYTICS_LOCATION_DIR = ANALYTICS_DIR / 'location'
 ANALYTICS_ACTIVE_HOUR_DIR = ANALYTICS_DIR / 'active_hour'
 TRASH_DIR = Path('trash-bin')
+FAVORITE_PATH = Path('data/favorite.txt')
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,23 @@ def get_video_list(skip_latest=False, max_videos=200, return_id=False):
         return [f.stem for f in video_files]
     else:
         return video_files
+
+def get_favorites():
+    with FAVORITE_PATH.open('r') as f:
+        lines = f.readlines()
+        return [line.strip('\n') for line in lines]
+
+def set_favorite(video_id, delete=False):
+    if not delete:
+        with FAVORITE_PATH.open('a') as f:
+            f.write(f"{video_id}\n")
+    else:
+        with FAVORITE_PATH.open('r') as f:
+            lines = f.readlines()
+        with FAVORITE_PATH.open('w') as f:
+            for line in lines:
+                if line.strip("\n") != video_id:
+                    f.write(line)
 
 def get_video_logs():
     logs = {}

@@ -68,6 +68,21 @@ def video_request(video_id):
         utils.delete_video_by_id(video_id)
         return f"deleted {video_id}"
 
+@app.route('/favorites')
+def get_favorites():
+    return utils.get_favorites()
+
+@app.route('/favorite/<path:video_id>', methods=['POST', 'DELETE'])
+def set_favorite(video_id):
+    if not is_user_admin(request):
+        return {"error": f"Unauthorized"}, 403
+    if request.method == 'POST':
+        utils.set_favorite(video_id)
+        return f"marked {video_id} as favorite"
+    elif request.method == 'DELETE':
+        utils.set_favorite(video_id, delete=True)
+        return f"unmarked {video_id} as favorite"
+
 @app.route('/merge', methods=['POST'])
 def merge_videos():
     if not is_user_admin(request):
