@@ -19,7 +19,6 @@ CORS(app) # TODO: is this correct?
 ### API routes  
 def _get_livestream():
     for frame in app.camera_feed.stream_frame():
-
         _, buf = cv2.imencode('.jpg', frame)
         yield (b'--frame\r\n'
                b'Content-Type: image.jpeg\r\n\r\n'
@@ -47,7 +46,7 @@ def livestreamr():
 
 @app.route('/past-visits')
 def past_visists():
-    n_videos = request.args.get('n', 200)
+    n_videos = int(request.args.get('n', 200))
     prefix = request.args.get('prefix', None)
     return utils.get_video_list(skip_latest=app.camera_feed.get_is_recording(), max_videos=n_videos, return_id=True, prefix=prefix)
 
