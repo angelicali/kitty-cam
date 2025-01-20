@@ -47,7 +47,9 @@ def livestreamr():
 
 @app.route('/past-visits')
 def past_visists():
-    return utils.get_video_list(skip_latest=app.camera_feed.get_is_recording(), max_videos=50, return_id=True)
+    n_videos = request.args.get('n', 200)
+    prefix = request.args.get('prefix', None)
+    return utils.get_video_list(skip_latest=app.camera_feed.get_is_recording(), max_videos=n_videos, return_id=True, prefix=prefix)
 
 def is_user_admin(request):
     user_ip = request.headers.get("X-Forwarded-For", request.remote_addr)

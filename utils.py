@@ -18,8 +18,10 @@ FAVORITE_PATH = Path('data/favorite.txt')
 
 logger = logging.getLogger(__name__)
 
-def get_video_list(skip_latest=False, max_videos=200, return_id=False):
+def get_video_list(skip_latest=False, max_videos=200, return_id=False, prefix=None):
     video_files = list(VIDEO_DIR.iterdir())
+    if prefix:
+        video_files = [file for file in video_files if file.startswith(prefix)]
     video_files.sort(reverse=True)
     if skip_latest:
         video_files = video_files[1:]
